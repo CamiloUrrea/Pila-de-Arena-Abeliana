@@ -122,13 +122,18 @@ describe('resolverTirada: propiedades', () => {
     fc.assert(
       fc.property(arbEstadoListoParaConfirmar, (estado) => {
         const r = resolverBien(estado);
+        // Sin el paso 5 (T1.7b) la fase no cambia; se le da la coherente con puntos y tiradas
+        // para que validarEstado juzgue la composición y no la fase.
+        const fase = r.puntos >= estado.config.meta ? 'ganada' : r.tiradasRestantes === 0 ? 'perdida' : 'colocando';
         const siguiente: Estado = {
           ...estado,
+          fase,
           celdas: r.celdas,
           puntos: r.puntos,
           usados: r.usados,
           tiradasRestantes: r.tiradasRestantes,
           mano: [],
+          ordenColocacion: [],
         };
         expect(validarEstado(siguiente)).toEqual({ ok: true, valor: siguiente });
       }),
@@ -211,6 +216,7 @@ function copiaProfunda(estado: Estado): Estado {
     config: { ...estado.config, siembra: { ...estado.config.siembra }, mazo: { ...estado.config.mazo } },
     celdas: estado.celdas.map((fila) => [...fila]),
     mano: estado.mano.map((g) => ({ tipo: g.tipo, celda: g.celda === null ? null : { ...g.celda } })),
+    ordenColocacion: [...estado.ordenColocacion],
     mazo: [...estado.mazo],
     usados: [...estado.usados],
     rng: { siembra: [...estado.rng.siembra], mazo: [...estado.rng.mazo] },

@@ -37,6 +37,9 @@ export function validarConfig(config: Config): Resultado<Config, ErrorConfig> {
   if (config.tamanoMano > totalMazo) return falla('tamanoMano', `no puede superar el total del mazo (${totalMazo})`);
   if (config.siembra.min < 0) return falla('siembra.min', 'no puede ser negativo');
   if (config.siembra.min > config.siembra.max) return falla('siembra.max', 'no puede ser menor que siembra.min');
+  if (config.siembra.max >= config.umbral) {
+    return falla('siembra.max', `debe ser menor que el umbral (${config.umbral}) para que la rejilla inicial sea estable`);
+  }
   if (config.meta < 1) return falla('meta', 'debe ser al menos 1');
   if (config.multiplicadorPorOleada < 0) return falla('multiplicadorPorOleada', 'no puede ser negativo');
   if (config.topeOleadas < 1) return falla('topeOleadas', 'debe ser al menos 1');
@@ -72,6 +75,28 @@ export function validarEstado(estado: Estado): Resultado<Estado, ErrorEstado> {
     if (grano.celda !== null && !dentro(lado, grano.celda.x, grano.celda.y)) {
       return falla(`mano[${i}].celda`, 'está fuera de la rejilla');
     }
+  }
+
+  const { meta } = estado.config;
+  const { fase, puntos, tiradasRestantes } = estado;
+  if (fase === 'ganada' && puntos < meta) return falla('fase', `ganada exige puntos (${puntos}) >= meta (${meta})`);
+  if (fase !== 'ganada' && puntos >= meta) return falla('fase', `${fase} exige puntos (${puntos}) < meta (${meta})`);
+  if (fase === 'perdida' && tiradasRestantes !== 0) {
+    return falla('fase', `perdida exige 0 tiradas restantes y quedan ${tiradasRestantes}`);
+  }
+  if (fase === 'colocando' && tiradasRestantes < 1) return falla('fase', 'colocando exige al menos 1 tirada restante');
+
+  const vistos = new Set<number>();
+  for (const [j, i] of estado.ordenColocacion.entries()) {
+    if (!Number.isInteger(i) || i < 0 || i >= estado.mano.length) {
+      return falla(`ordenColocacion[${j}]`, `el índice ${i} no está en la mano`);
+    }
+    if (vistos.has(i)) return falla(`ordenColocacion[${j}]`, `el índice ${i} está repetido`);
+    if (estado.mano[i]?.celda === null) return falla(`ordenColocacion[${j}]`, `el grano ${i} no está colocado`);
+    vistos.add(i);
+  }
+  for (const [i, grano] of estado.mano.entries()) {
+    if (grano.celda !== null && !vistos.has(i)) return falla('ordenColocacion', `falta el grano colocado ${i}`);
   }
 
   const todos = [...estado.mazo, ...estado.mano.map((grano) => grano.tipo), ...estado.usados];

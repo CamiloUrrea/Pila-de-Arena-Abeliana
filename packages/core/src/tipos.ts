@@ -57,6 +57,8 @@ export type Estado = {
   readonly celdas: Celdas;
   readonly fase: Fase;
   readonly mano: readonly GranoMano[];
+  /** Índices de la mano en el orden en que se colocaron en esta tirada; `Deshacer` quita el último. */
+  readonly ordenColocacion: readonly number[];
   /** Tipos restantes en orden de robo; la cabeza es el índice 0. */
   readonly mazo: readonly TipoGrano[];
   readonly usados: readonly TipoGrano[];

@@ -25,6 +25,7 @@ describe('validarConfig', () => {
     ['tamanoMano igual al total del mazo', { ...CONFIG_INICIAL, tamanoMano: 30 }],
     ['siembra con mínimo igual al máximo', { ...CONFIG_INICIAL, siembra: { min: 2, max: 2 } }],
     ['multiplicadorPorOleada 0', { ...CONFIG_INICIAL, multiplicadorPorOleada: 0 }],
+    ['siembra.max igual a umbral − 1', { ...CONFIG_INICIAL, siembra: { min: 0, max: 3 } }],
     ['un tipo del mazo a 0', { ...CONFIG_INICIAL, mazo: { normal: 5, pesado: 0, explosivo: 0 } }],
   ])('acepta el caso límite: %s', (_, config) => {
     expect(validarConfig(config).ok).toBe(true);
@@ -48,6 +49,8 @@ describe('validarConfig', () => {
     ['siembra.min negativo', { ...CONFIG_INICIAL, siembra: { min: -1, max: 2 } }, 'siembra.min'],
     ['siembra.min no entero', { ...CONFIG_INICIAL, siembra: { min: 0.5, max: 2 } }, 'siembra.min'],
     ['siembra.min mayor que siembra.max', { ...CONFIG_INICIAL, siembra: { min: 3, max: 2 } }, 'siembra.max'],
+    ['siembra.max igual al umbral', { ...CONFIG_INICIAL, siembra: { min: 0, max: 4 } }, 'siembra.max'],
+    ['siembra.max mayor que el umbral', { ...CONFIG_INICIAL, siembra: { min: 2, max: 7 } }, 'siembra.max'],
     ['mazo.pesado negativo', { ...CONFIG_INICIAL, mazo: { normal: 20, pesado: -1, explosivo: 4 } }, 'mazo.pesado'],
     ['mazo.normal no entero', { ...CONFIG_INICIAL, mazo: { normal: 1.5, pesado: 6, explosivo: 4 } }, 'mazo.normal'],
     ['meta 0', { ...CONFIG_INICIAL, meta: 0 }, 'meta'],
@@ -59,6 +62,9 @@ describe('validarConfig', () => {
     expect(resultado.ok).toBe(false);
     if (!resultado.ok) {
       expect(resultado.error.campo).toBe(campo);
+      if (campo === 'siembra.max' && config.siembra.max >= config.umbral) {
+        expect(resultado.error.motivo).toContain('rejilla inicial sea estable');
+      }
       expect(resultado.error.motivo).not.toBe('');
     }
   });

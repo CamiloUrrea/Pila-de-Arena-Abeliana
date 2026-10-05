@@ -18,6 +18,7 @@ export function estadoDePrueba(overrides: Partial<Estado> = {}): Estado {
     celdas: crearRejilla(CONFIG_INICIAL.lado),
     fase: 'colocando',
     mano: tipos.slice(0, CONFIG_INICIAL.tamanoMano).map((tipo) => ({ tipo, celda: null })),
+    ordenColocacion: [],
     mazo: tipos.slice(CONFIG_INICIAL.tamanoMano),
     usados: [],
     tiradasRestantes: CONFIG_INICIAL.tiradas,
@@ -58,6 +59,13 @@ export const arbConfig: fc.Arbitrary<Config> = fc
     topeOleadas: r.topeOleadas,
   }));
 
+/** Índices de los granos colocados, permutados según `claves` (desempate por índice). */
+export function ordenAleatorio(mano: readonly GranoMano[], claves: readonly number[]): number[] {
+  return mano
+    .flatMap((grano, i) => (grano.celda === null ? [] : [i]))
+    .sort((a, b) => (claves[a] ?? 0) - (claves[b] ?? 0) || a - b);
+}
+
 const palabra = fc.integer({ min: 0, max: 0xffffffff });
 
 /** Estados de flujo válidos: cuatro palabras de 32 bits sin signo, no todas cero. */
@@ -65,7 +73,10 @@ export const arbFlujo: fc.Arbitrary<EstadoFlujo> = fc
   .tuple(palabra, palabra, palabra, palabra)
   .filter((flujo) => flujo.some((p) => p !== 0));
 
-/** Estados válidos: celdas 0..7 y la composición del mazo repartida entre mazo, mano y usados. */
+/**
+ * Estados válidos: celdas 0..7, la composición del mazo repartida entre mazo, mano y usados,
+ * `ordenColocacion` como permutación aleatoria de los granos colocados, y fase coherente con puntos y tiradas.
+ */
 export const arbEstado: fc.Arbitrary<Estado> = arbConfig.chain((config) => {
   const { lado, tamanoMano } = config;
   const tipos = composicion(config.mazo);
@@ -83,22 +94,30 @@ export const arbEstado: fc.Arbitrary<Estado> = arbConfig.chain((config) => {
         minLength: tamanoMano,
         maxLength: tamanoMano,
       }),
+      claves: fc.array(fc.nat(), { minLength: tamanoMano, maxLength: tamanoMano }),
       fase: fc.constantFrom(...FASES),
-      tiradasRestantes: fc.integer({ min: 0, max: config.tiradas }),
-      puntos: fc.integer({ min: 0, max: 1_000_000 }),
+      tiradas: fc.nat(),
+      puntos: fc.nat({ max: 1_000_000 }),
       rng: fc.record({ siembra: arbFlujo, mazo: arbFlujo }),
     })
     .map((r): Estado => {
       const finUsados = r.nMano + Math.min(r.nUsados, tipos.length - r.nMano);
+      const mano = r.orden.slice(0, r.nMano).map((tipo, i) => ({ tipo, celda: r.celdasMano[i] ?? null }));
+      // Fase coherente: ganada con puntos >= meta; perdida con puntos < meta y 0 tiradas;
+      // colocando con puntos < meta y al menos 1 tirada.
+      const puntos = r.fase === 'ganada' ? config.meta + r.puntos : r.puntos % config.meta;
+      const tiradasRestantes =
+        r.fase === 'ganada' ? r.tiradas % (config.tiradas + 1) : r.fase === 'perdida' ? 0 : 1 + (r.tiradas % config.tiradas);
       return {
         config,
         celdas: r.celdas,
         fase: r.fase,
-        mano: r.orden.slice(0, r.nMano).map((tipo, i) => ({ tipo, celda: r.celdasMano[i] ?? null })),
+        mano,
+        ordenColocacion: ordenAleatorio(mano, r.claves),
         mazo: r.orden.slice(finUsados),
         usados: r.orden.slice(r.nMano, finUsados),
-        tiradasRestantes: r.tiradasRestantes,
-        puntos: r.puntos,
+        tiradasRestantes,
+        puntos,
         rng: r.rng,
       };
     });
@@ -122,6 +141,7 @@ export function invertirClaves(e: Estado): Estado {
     tiradasRestantes: e.tiradasRestantes,
     usados: e.usados,
     mazo: e.mazo,
+    ordenColocacion: e.ordenColocacion,
     mano: e.mano.map((g) => ({ celda: g.celda === null ? null : { y: g.celda.y, x: g.celda.x }, tipo: g.tipo })),
     fase: e.fase,
     celdas: e.celdas,
@@ -150,10 +170,18 @@ export function restar(tipos: readonly TipoGrano[], quitar: readonly TipoGrano[]
   return resto;
 }
 
-/** Sustituye la mano y deja en el mazo, en orden de composición, lo que no está en la mano ni en `usados`. */
-export function conMano(estado: Estado, mano: readonly GranoMano[]): Estado {
+/**
+ * Sustituye la mano y deja en el mazo, en orden de composición, lo que no está en la mano ni en `usados`.
+ * `ordenColocacion` es `orden` o, si se omite, los granos colocados por índice.
+ */
+export function conMano(estado: Estado, mano: readonly GranoMano[], orden?: readonly number[]): Estado {
   const enJuego = [...estado.usados, ...mano.map((grano) => grano.tipo)];
-  return { ...estado, mano, mazo: restar(composicion(estado.config.mazo), enJuego) };
+  return {
+    ...estado,
+    mano,
+    ordenColocacion: orden ?? ordenAleatorio(mano, []),
+    mazo: restar(composicion(estado.config.mazo), enJuego),
+  };
 }
 
 /** Composición amplia para que cualquier mano de hasta 6 granos quepa en el mazo. */
@@ -161,7 +189,8 @@ const MAZO_AMPLIO: Config['mazo'] = { normal: 10, pesado: 6, explosivo: 6 };
 
 /**
  * Estados válidos listos para `resolverTirada`: lado 1 a 9, rejilla estable, mano de 1 a 6 granos colocados
- * (varios pueden compartir celda), multiplicador 0 a 100, puntos previos 0 a 100000 y 1 a 5 tiradas restantes.
+ * (varios pueden compartir celda) en orden aleatorio, multiplicador 0 a 100, puntos previos 0 a 100000
+ * y 1 a 5 tiradas restantes. La meta queda por encima de los puntos previos para que la fase colocando sea coherente.
  */
 export const arbEstadoListoParaConfirmar: fc.Arbitrary<Estado> = fc.integer({ min: 1, max: 9 }).chain((lado) => {
   const coordenada = fc.integer({ min: 0, max: lado - 1 });
@@ -182,6 +211,7 @@ export const arbEstadoListoParaConfirmar: fc.Arbitrary<Estado> = fc.integer({ mi
       multiplicadorPorOleada: fc.integer({ min: 0, max: 100 }),
       puntos: fc.integer({ min: 0, max: 100_000 }),
       tiradasRestantes: fc.integer({ min: 1, max: 5 }),
+      claves: fc.array(fc.nat(), { minLength: 6, maxLength: 6 }),
     })
     .map((r) => {
       const config: Config = {
@@ -191,6 +221,7 @@ export const arbEstadoListoParaConfirmar: fc.Arbitrary<Estado> = fc.integer({ mi
         tamanoMano: r.mano.length,
         mazo: MAZO_AMPLIO,
         multiplicadorPorOleada: r.multiplicadorPorOleada,
+        meta: 1_000_000,
       };
       const libres = restar(composicion(MAZO_AMPLIO), r.mano.map((grano) => grano.tipo));
       const base = estadoDePrueba({
@@ -200,6 +231,6 @@ export const arbEstadoListoParaConfirmar: fc.Arbitrary<Estado> = fc.integer({ mi
         tiradasRestantes: r.tiradasRestantes,
         puntos: r.puntos,
       });
-      return conMano(base, r.mano);
+      return conMano(base, r.mano, ordenAleatorio(r.mano, r.claves));
     });
 });

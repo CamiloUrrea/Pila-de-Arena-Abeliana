@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { deserializar, serializar } from '../src/index.ts';
-import { arbEstado, congelar, estadoDePrueba, invertirClaves } from './ayudantes.ts';
+import { arbEstado, congelar, conMano, estadoDePrueba, invertirClaves } from './ayudantes.ts';
 
 describe('serializar y deserializar', () => {
   it('produce JSON canónico con la envoltura de formato 1', () => {
@@ -16,6 +16,23 @@ describe('serializar y deserializar', () => {
         expect(deserializar(serializar(estado))).toEqual({ ok: true, valor: estado });
       }),
     );
+  });
+
+  it('la ida y vuelta conserva ordenColocacion', () => {
+    const estado = conMano(
+      estadoDePrueba(),
+      [
+        { tipo: 'normal', celda: { x: 2, y: 2 } },
+        { tipo: 'normal', celda: { x: 0, y: 1 } },
+        { tipo: 'normal', celda: null },
+        { tipo: 'normal', celda: { x: 0, y: 1 } },
+        { tipo: 'normal', celda: null },
+      ],
+      [3, 0, 1],
+    );
+    const leido = deserializar(serializar(estado));
+    expect(leido).toEqual({ ok: true, valor: estado });
+    if (leido.ok) expect(leido.valor.ordenColocacion).toEqual([3, 0, 1]);
   });
 
   it('volver a serializar da exactamente el mismo texto', () => {
@@ -77,6 +94,17 @@ describe('deserializar rechaza', () => {
       'un campo extra anidado',
       texto.replace('"min":0', '"media":1,"min":0'),
       { tipo: 'EstadoInvalido', campo: 'config.siembra.media' },
+    ],
+    ['sin ordenColocacion', texto.replace('"ordenColocacion":[],', ''), { tipo: 'EstadoInvalido', campo: 'ordenColocacion' }],
+    [
+      'ordenColocacion que no es arreglo',
+      texto.replace('"ordenColocacion":[]', '"ordenColocacion":{}'),
+      { tipo: 'EstadoInvalido', campo: 'ordenColocacion' },
+    ],
+    [
+      'ordenColocacion con texto',
+      texto.replace('"ordenColocacion":[]', '"ordenColocacion":["0"]'),
+      { tipo: 'EstadoInvalido', campo: 'ordenColocacion[0]' },
     ],
     ['puntos como texto', texto.replace('"puntos":0', '"puntos":"0"'), { tipo: 'EstadoInvalido', campo: 'puntos' }],
     [

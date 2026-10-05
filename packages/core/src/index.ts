@@ -47,3 +47,4 @@ export { crearMazo, robarMano } from './mazo.ts';
 export type { ResultadoRobo } from './mazo.ts';
 export { resolverTirada } from './tirada.ts';
 export type { ResolucionTirada } from './tirada.ts';
+export { crearRonda } from './ronda.ts';
