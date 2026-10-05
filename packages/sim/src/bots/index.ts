@@ -1,7 +1,11 @@
 import type { Bot } from '../bot.ts';
+import { BOT_ALEATORIO } from './aleatorio.ts';
+import { BOT_BORDE } from './borde.ts';
 import { BOT_CICLICO } from './ciclico.ts';
 
 /** Registro de bots por nombre, para la línea de comandos y los informes. */
 export const BOTS: Readonly<Record<string, Bot>> = {
   [BOT_CICLICO.nombre]: BOT_CICLICO,
+  [BOT_ALEATORIO.nombre]: BOT_ALEATORIO,
+  [BOT_BORDE.nombre]: BOT_BORDE,
 };

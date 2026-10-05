@@ -100,4 +100,16 @@ type Bot = {
 - `elegir` es una función pura. Recibe el estado, las acciones legales (`accionesLegales(estado)`, nunca vacías) y el estado de su flujo de azar, y devuelve la acción elegida y el flujo siguiente. Para su azar debe usar las funciones de azar del núcleo (`siguienteU32`, `enteroEnRango`, `barajar`) sobre ese flujo.
 - No guarda estado entre llamadas: lo que necesite recordar lo deduce del estado de la ronda o de su flujo.
 - Si devuelve una acción que `aplicar` rechaza, o si la ronda supera `maxAcciones` (10 000 por defecto), la simulación se detiene con un error que incluye la semilla y el nombre del bot.
-- Los bots se registran por nombre en `BOTS` (`packages/sim/src/bots/index.ts`). Hoy existe `ciclico`: coloca cada grano en la siguiente celda de un recorrido por filas y confirma.
+- Los bots se registran por nombre en `BOTS` (`packages/sim/src/bots/index.ts`).
+
+## Bots
+
+Ningún bot de esta lista usa `Deshacer`. Todos colocan primero el grano sin colocar de menor índice y eligen `Confirmar` cuando ya no queda ningún `Colocar` legal. `aleatorio` y `borde` eligen siempre de la lista de acciones que reciben, así que son legales por construcción.
+
+| Bot | Qué hace | Qué mide | Límites |
+| --- | --- | --- | --- |
+| `ciclico` | Coloca cada grano en la siguiente celda de un recorrido cíclico por filas, que continúa entre tiradas. Sin azar. | Una referencia determinista y reproducible, la del ejemplo de `ejemplo-ronda.ts`. | No mira la rejilla. Deduce su cursor del estado suponiendo manos de `tamanoMano` granos, cierto en H1. |
+| `aleatorio` | Coloca el grano en una celda uniforme entre sus `Colocar` legales, con `enteroEnRango` sobre su flujo de azar. | El suelo de dificultad: lo que consigue alguien que juega sin criterio. Si gana casi siempre, la ronda es demasiado fácil. | Ninguna estrategia; su varianza es la del juego más la de sus elecciones. |
+| `borde` | Coloca el grano en la celda del perímetro (`x` o `y` en el límite) con más granos actuales. En empate prefiere esquina a borde y, dentro de la misma categoría, la primera por filas. Sin azar: devuelve el flujo sin consumirlo. | Fuerza bruta voraz: empuja la rejilla a derrumbarse cerca del borde, donde los granos salen y puntúan. | Solo mira la carga actual, no anticipa cascadas ni el orden de la mano. En 3×3 el perímetro cubre 8 de las 9 celdas, así que se parece mucho a «la celda más cargada»; en rejillas mayores el interior pesa más. En lados 1 y 2 todas las celdas son perímetro. |
+
+Con `CONFIG_INICIAL` (meta 1000) y 20000 rondas, los tres ganan el 100 % de las rondas: la meta inicial está por calibrar en H2 (T2.5), y por ahora no distingue entre bots.

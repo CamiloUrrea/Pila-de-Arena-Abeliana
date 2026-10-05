@@ -1,6 +1,8 @@
 export { flujoDelBot, semillaDelBot } from './bot.ts';
 export type { Bot } from './bot.ts';
 export { BOTS } from './bots/index.ts';
+export { BOT_ALEATORIO } from './bots/aleatorio.ts';
+export { BOT_BORDE } from './bots/borde.ts';
 export { BOT_CICLICO } from './bots/ciclico.ts';
 export { jugarConBot } from './jugar.ts';
 export type { PartidaConBot } from './jugar.ts';
