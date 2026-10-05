@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { CONFIG_INICIAL, FASES, TIPOS_GRANO, crearRejilla } from '../src/index.ts';
-import type { Config, Estado, EstadoFlujo, TipoGrano } from '../src/index.ts';
+import type { Config, Estado, EstadoFlujo, GranoMano, TipoGrano } from '../src/index.ts';
 
 /** Lista de tipos con la composición de `mazo`, en el orden de `TIPOS_GRANO`. */
 export function composicion(mazo: Config['mazo']): TipoGrano[] {
@@ -138,3 +138,68 @@ export function invertirClaves(e: Estado): Estado {
     },
   };
 }
+
+/** `tipos` sin una aparición de cada elemento de `quitar`. Falla si alguno no está. */
+export function restar(tipos: readonly TipoGrano[], quitar: readonly TipoGrano[]): TipoGrano[] {
+  const resto = [...tipos];
+  for (const tipo of quitar) {
+    const i = resto.indexOf(tipo);
+    if (i < 0) throw new Error(`no queda ningún ${tipo} que quitar`);
+    resto.splice(i, 1);
+  }
+  return resto;
+}
+
+/** Sustituye la mano y deja en el mazo, en orden de composición, lo que no está en la mano ni en `usados`. */
+export function conMano(estado: Estado, mano: readonly GranoMano[]): Estado {
+  const enJuego = [...estado.usados, ...mano.map((grano) => grano.tipo)];
+  return { ...estado, mano, mazo: restar(composicion(estado.config.mazo), enJuego) };
+}
+
+/** Composición amplia para que cualquier mano de hasta 6 granos quepa en el mazo. */
+const MAZO_AMPLIO: Config['mazo'] = { normal: 10, pesado: 6, explosivo: 6 };
+
+/**
+ * Estados válidos listos para `resolverTirada`: lado 1 a 9, rejilla estable, mano de 1 a 6 granos colocados
+ * (varios pueden compartir celda), multiplicador 0 a 100, puntos previos 0 a 100000 y 1 a 5 tiradas restantes.
+ */
+export const arbEstadoListoParaConfirmar: fc.Arbitrary<Estado> = fc.integer({ min: 1, max: 9 }).chain((lado) => {
+  const coordenada = fc.integer({ min: 0, max: lado - 1 });
+  return fc
+    .record({
+      celdas: fc.array(fc.array(fc.integer({ min: 0, max: 3 }), { minLength: lado, maxLength: lado }), {
+        minLength: lado,
+        maxLength: lado,
+      }),
+      mano: fc.array(
+        fc.record({
+          tipo: fc.constantFrom<TipoGrano>(...TIPOS_GRANO),
+          celda: fc.record({ x: coordenada, y: coordenada }),
+        }),
+        { minLength: 1, maxLength: 6 },
+      ),
+      nUsados: fc.nat({ max: 16 }),
+      multiplicadorPorOleada: fc.integer({ min: 0, max: 100 }),
+      puntos: fc.integer({ min: 0, max: 100_000 }),
+      tiradasRestantes: fc.integer({ min: 1, max: 5 }),
+    })
+    .map((r) => {
+      const config: Config = {
+        ...CONFIG_INICIAL,
+        lado,
+        tiradas: 5,
+        tamanoMano: r.mano.length,
+        mazo: MAZO_AMPLIO,
+        multiplicadorPorOleada: r.multiplicadorPorOleada,
+      };
+      const libres = restar(composicion(MAZO_AMPLIO), r.mano.map((grano) => grano.tipo));
+      const base = estadoDePrueba({
+        config,
+        celdas: r.celdas,
+        usados: libres.slice(0, r.nUsados),
+        tiradasRestantes: r.tiradasRestantes,
+        puntos: r.puntos,
+      });
+      return conMano(base, r.mano);
+    });
+});

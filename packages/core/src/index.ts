@@ -36,6 +36,8 @@ export type {
   ManoRobada,
   OleadaIniciada,
   OleadaTerminada,
+  TiradaConfirmada,
+  TiradaResuelta,
 } from './eventos.ts';
 export { GRANOS_POR_DERRUMBE, resolverOleadas } from './oleadas.ts';
 export type { ErrorResolucion, ParametrosOleadas, ResultadoOleadas } from './oleadas.ts';
@@ -43,3 +45,5 @@ export { aplicarAdiciones } from './adiciones.ts';
 export type { ResultadoAdiciones } from './adiciones.ts';
 export { crearMazo, robarMano } from './mazo.ts';
 export type { ResultadoRobo } from './mazo.ts';
+export { resolverTirada } from './tirada.ts';
+export type { ResolucionTirada } from './tirada.ts';

@@ -6,6 +6,18 @@ export type Direccion = 'arriba' | 'derecha' | 'abajo' | 'izquierda';
 /** Mano robada, en orden de robo. */
 export type ManoRobada = { readonly tipo: 'ManoRobada'; readonly tipos: readonly TipoGrano[] };
 
+/** Empieza la resolución de la tirada número `numero` (desde 1). */
+export type TiradaConfirmada = { readonly tipo: 'TiradaConfirmada'; readonly numero: number };
+
+/** Fin de la resolución de una tirada. Puntos en centésimas. */
+export type TiradaResuelta = {
+  readonly tipo: 'TiradaResuelta';
+  readonly oleadas: number;
+  readonly granosFuera: number;
+  readonly puntosGanados: number;
+  readonly puntosTotales: number;
+};
+
 /** Granos que recibió la celda `(x, y)` en el paso 1, sumando todas las colocaciones. */
 export type AdicionAplicada = {
   readonly tipo: 'AdicionAplicada';
@@ -42,5 +54,13 @@ export type OleadaTerminada = {
   readonly puntosGanados: number;
 };
 
-/** Eventos del núcleo. Los demás eventos de la especificación llegan en T1.6 y T1.7. */
-export type Evento = ManoRobada | AdicionAplicada | OleadaIniciada | Derrumbe | GranoFuera | OleadaTerminada;
+/** Eventos del núcleo. Los demás eventos de la especificación llegan en T1.7. */
+export type Evento =
+  | ManoRobada
+  | TiradaConfirmada
+  | AdicionAplicada
+  | OleadaIniciada
+  | Derrumbe
+  | GranoFuera
+  | OleadaTerminada
+  | TiradaResuelta;
