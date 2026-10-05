@@ -1,4 +1,4 @@
-# Especificación del núcleo (v0.5)
+# Especificación del núcleo (v0.6)
 
 > Copia versionada para el repositorio. La fuente de verdad es el documento «MVP - Juego de la Pila de Arena Abeliana», pestaña «Especificación del núcleo». Si la especificación cambia, se vuelve a exportar y se sube de versión.
 
@@ -137,7 +137,7 @@ Estas pruebas forman el criterio de cierre de H1. Las de propiedades se escriben
 | Idempotencia | Resolver una configuración ya estable no cambia nada ni emite oleadas |
 | Serialización | `deserializar(serializar(e))` es igual a `e`, y seguir jugando tras la ida y vuelta da el mismo resultado que seguir sin ella |
 | Validez del estado | Celdas enteras mayores o iguales que 0, y mazo más mano más usados siempre igual a la composición configurada |
-| Reciclaje del mazo | Con tamanoMano 6 y 6 tiradas se roban 36 granos de un mazo de 30: la mano se completa con los granos restantes más los usados barajados, y mazo más mano más usados sigue igual a la composición configurada |
+| Reciclaje del mazo | Con tamanoMano 6 y 6 tiradas se roban 36 granos de un mazo de 30: la mano se completa con los granos restantes más los usados barajados, y mazo más mano más usados sigue igual a la composición configurada. Un segundo caso, con tamanoMano 7, deja 2 granos restantes al reciclar (cuatro manos de 7 suman 28) y comprueba que se toman antes que los usados barajados |
 | Tope de oleadas | Con un topeOleadas pequeño forzado, la tirada devuelve ResolucionNoTermino y el estado queda idéntico al anterior |
 | Independencia de flujos | Cambiar la composición del mazo no cambia la siembra de la rejilla con la misma semilla |
 | Ejemplos de oro | Los tres casos de la sección siguiente, con sus resultados exactos |
@@ -193,7 +193,7 @@ Sin oleadas. Los dos vecinos que quedarían fuera de la rejilla no reciben nada 
 
 ## Decisiones confirmadas
 
-Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2 y T1.3.
+Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5.
 
 - **Una oleada, un derrumbe por celda: aprobado.** Una celda con 8 o más granos necesita varias oleadas, y las cargas grandes alargan la cascada. Alternativa descartada: derrumbes múltiples por oleada, que acortan las cascadas y bajan los puntos.
 - **Explosivo en el borde: aprobado.** Los vecinos fuera de la rejilla no reciben nada ni dan puntos. Alternativa descartada: contarlos como granos que salen, que daría puntos sin cascada.
@@ -207,3 +207,4 @@ Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada e
 - **Serialización con envoltura de formato y resultado tipado: añadido en v0.3.** Una futura versión del formato se detecta sin romper nada en silencio, y deserializar sigue la regla de errores tipados en vez de excepciones. Alternativa descartada: lanzar excepciones al deserializar.
 - **Generador `xoshiro128**` y precondiciones con RangeError: añadido en v0.4.** Se eligió `xoshiro128**` por su periodo de 2^128−1 y por sus vectores de referencia publicados, que permiten verificarlo contra una fuente independiente. Una semilla fuera de rango, un rango vacío o un rango de más de 2^32 valores lanzan RangeError, porque son errores de programación y no caminos de juego. Alternativa descartada: sfc32, igualmente válido pero sin esas ventajas de verificación.
 - **GranoFuera lleva la celda de origen: añadido en v0.5.** Sus coordenadas x e y son las de la celda que se derrumba y la dirección indica por dónde sale el grano, que es lo que necesitan la animación y el sonido. Alternativa descartada: usar la celda vecina fuera de la rejilla, con coordenadas como −1, que complicaría cada consumidor del evento.
+- **Granos como tabla de desplazamientos: añadido en v0.6.** Cada tipo declara sus adiciones como una lista de (dx, dy, cantidad) y lo que cae fuera de la rejilla se ignora, así que añadir un tipo de grano es añadir una fila de datos. Alternativa descartada: una rama de código por tipo, que va contra la regla de granos y bonus como datos. Además, la prueba de reciclaje con tamanoMano 6 no ejercita los granos restantes (cinco manos de 6 vacían justo el mazo de 30), por eso se añadió el caso con tamanoMano 7.
