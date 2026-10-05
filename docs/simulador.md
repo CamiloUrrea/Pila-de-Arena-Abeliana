@@ -1,0 +1,103 @@
+# Simulador por lotes (`@pila/sim`)
+
+El simulador juega muchas rondas con un bot y guarda un registro por ronda en un archivo JSONL. Los informes de métricas (T2.4) y la calibración (T2.5) leen esos archivos. Solo usa la interfaz pública de `@pila/core` ([`api-nucleo.md`](api-nucleo.md)).
+
+## Uso
+
+```sh
+pnpm --filter @pila/sim simular -- --bot ciclico --rondas 20000
+```
+
+| Opción | Obligatoria | Por defecto | Significado |
+| --- | --- | --- | --- |
+| `--bot <nombre>` | sí | — | Bot del registro `BOTS`. Si no existe, se listan los disponibles. |
+| `--rondas <n>` | sí | — | Número de rondas del lote (al menos 1). |
+| `--semilla <s>` | no | `1` | Semilla inicial, entero de 0 a 4294967295. |
+| `--desde <i>` | no | `0` | Índice global de la primera ronda del lote. |
+| `--salida <ruta>` | no | `resultados/<bot>-<semilla>-<desde>-<rondas>.jsonl` | Archivo de salida, relativo al directorio de trabajo. Se sobrescribe. Con `pnpm --filter` el directorio es `packages/sim`. |
+| `--config <archivo.json>` | no | — | Anulaciones parciales de la configuración. Se fusionan en profundidad en `siembra` y `mazo` (por ejemplo `{"siembra":{"max":3}}` cambia solo el máximo). |
+| `--set campo=valor` | no | — | Repetible. Cambia un campo numérico de primer nivel: `lado`, `umbral`, `tiradas`, `tamanoMano`, `meta`, `multiplicadorPorOleada` o `topeOleadas`. Se aplica después de `--config`. |
+
+La configuración parte de `CONFIG_INICIAL`, aplica `--config` y luego cada `--set`, y la configuración efectiva se valida siempre con `validarConfig`.
+
+Códigos de salida:
+
+- `0`: el lote terminó.
+- `2`: error de uso o de configuración. Entran aquí las opciones desconocidas o mal formadas, un bot desconocido, un campo desconocido o mal tipado y una configuración que `validarConfig` rechaza.
+- `1`: la simulación falló, por ejemplo porque un bot devolvió una acción ilegal.
+
+Por pantalla se imprimen el bot, las rondas, las ganadas, las perdidas, el porcentaje de ganadas, la ruta del archivo, el tiempo y las rondas por segundo. El tiempo nunca se escribe en el archivo.
+
+## Formato del archivo
+
+Es JSONL: un objeto JSON por línea, con las claves siempre en el orden indicado.
+
+**Primera línea, cabecera:**
+
+| Campo | Contenido |
+| --- | --- |
+| `tipo` | `"cabecera"` |
+| `formato` | `1` |
+| `bot` | Nombre del bot. |
+| `config` | Configuración efectiva completa, con las claves en el orden de `Config`. |
+| `semillaInicial` | Semilla de la ronda de índice 0. |
+| `desde` | Índice global de la primera ronda del archivo. |
+| `rondas` | Número de rondas del archivo. |
+
+**Después, una línea por ronda:**
+
+| Campo | Contenido |
+| --- | --- |
+| `tipo` | `"ronda"` |
+| `indice` | Índice global de la ronda. |
+| `semilla` | Semilla de la ronda. |
+| `fase` | `"ganada"` o `"perdida"`. |
+| `puntos` | Puntos finales de la ronda, en centésimas. |
+| `tiradas` | Tiradas confirmadas. |
+| `porTirada` | Lista de `tiradas` elementos `{ oleadas, derrumbes, granosFuera, puntosGanados }`, en orden. |
+
+## Magnitudes registradas
+
+- **`oleadas`:** oleadas de la tirada (las del evento `TiradaResuelta`). La métrica de oleadas máximas en una tirada sale del máximo de este campo.
+- **`derrumbes`:** derrumbes de la tirada, es decir, la suma de los de todas sus oleadas. Es el **tamaño de la avalancha** de la tirada.
+- **`granosFuera`:** granos que salieron de la rejilla en la tirada.
+- **`puntosGanados`:** centésimas ganadas en la tirada, con el multiplicador de cadena ya aplicado. Su suma sobre la ronda es `puntos`.
+- **`puntos` y `fase`:** los finales de la ronda. `puntos >= meta` equivale a `fase` `ganada`.
+
+Con esto se calculan las métricas de T2.4: rondas ganadas por bot, media y desviación de los puntos por ronda, distribución del tamaño de las avalanchas y oleadas máximas en una tirada.
+
+## Semillas
+
+La ronda de índice global `i` usa la semilla `(semillaInicial + i) mod 2^32`. Las semillas son secuenciales y no se derivan de la semilla inicial con XOR ni con un hash. Así cada ronda se identifica por su semilla y se puede repetir sola (con `reproducir` o con `--semilla <s> --rondas 1`), y un lote no depende de cómo se reparta en trozos. Con una derivación por XOR (`semillaInicial ^ i`), dos lotes cuyas semillas iniciales solo difieren en los bits bajos recorrerían las mismas semillas en otro orden: por ejemplo, con 2 rondas, las semillas iniciales 0 y 1 darían {0, 1} y {1, 0}. Lotes que parecen distintos medirían entonces las mismas rondas.
+
+El bot tiene su propio flujo de azar por ronda: `derivarFlujo(semillaDelBot(semilla), 'mazo')`, donde `semillaDelBot` multiplica, suma una constante y aplica el finalizador de MurmurHash3 (todo con `Math.imul`). Así el azar del bot es independiente en la práctica de los flujos `siembra` y `mazo` del juego. Como `derivarFlujo` combina la semilla con el nombre del flujo mediante un XOR, una semilla del bot de la forma `semilla ^ c` daría exactamente el flujo `siembra` de la ronda con semilla `semilla ^ c ^ hash('mazo') ^ hash('siembra')`: el bot quedaría correlacionado con otra ronda del mismo lote.
+
+## Lotes en paralelo
+
+Para repartir un lote grande entre varios procesos, cada uno simula un trozo con la misma `--semilla` y un `--desde` distinto:
+
+```sh
+pnpm --filter @pila/sim simular -- --bot ciclico --semilla 1 --desde 0     --rondas 50000 --salida resultados/t0.jsonl &
+pnpm --filter @pila/sim simular -- --bot ciclico --semilla 1 --desde 50000 --rondas 50000 --salida resultados/t1.jsonl &
+wait
+```
+
+Las líneas de ronda de los trozos, una detrás de otra, son idénticas a las de un único lote de 100000 rondas. Cada trozo lleva su propia cabecera, con su `desde` y sus `rondas`.
+
+## Determinismo
+
+Los mismos argumentos producen el mismo archivo byte a byte: el núcleo es determinista, el bot es una función pura de su flujo de azar, las semillas son secuenciales y el archivo no contiene marcas de tiempo ni ningún otro dato que cambie entre ejecuciones.
+
+## Contrato de un bot
+
+```ts
+type Bot = {
+  readonly nombre: string;
+  elegir(estado: Estado, acciones: readonly Accion[], azar: EstadoFlujo): readonly [Accion, EstadoFlujo];
+};
+```
+
+- `elegir` es una función pura. Recibe el estado, las acciones legales (`accionesLegales(estado)`, nunca vacías) y el estado de su flujo de azar, y devuelve la acción elegida y el flujo siguiente. Para su azar debe usar las funciones de azar del núcleo (`siguienteU32`, `enteroEnRango`, `barajar`) sobre ese flujo.
+- No guarda estado entre llamadas: lo que necesite recordar lo deduce del estado de la ronda o de su flujo.
+- Si devuelve una acción que `aplicar` rechaza, o si la ronda supera `maxAcciones` (10 000 por defecto), la simulación se detiene con un error que incluye la semilla y el nombre del bot.
+- Los bots se registran por nombre en `BOTS` (`packages/sim/src/bots/index.ts`). Hoy existe `ciclico`: coloca cada grano en la siguiente celda de un recorrido por filas y confirma.

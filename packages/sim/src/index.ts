@@ -1,2 +1,10 @@
+export { flujoDelBot, semillaDelBot } from './bot.ts';
+export type { Bot } from './bot.ts';
+export { BOTS } from './bots/index.ts';
+export { BOT_CICLICO } from './bots/ciclico.ts';
+export { jugarConBot } from './jugar.ts';
+export type { PartidaConBot } from './jugar.ts';
+export { configOrdenada, registrarTiradas, semillaDeRonda, simularLote, simularRonda } from './simulacion.ts';
+export type { OpcionesRonda, ParametrosLote, RegistroRonda, RegistroTirada, ResumenLote } from './simulacion.ts';
 export { jugarRonda, resumir } from './ejemplo-ronda.ts';
 export type { RondaJugada } from './ejemplo-ronda.ts';

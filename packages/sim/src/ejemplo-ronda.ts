@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
-import { CONFIG_INICIAL, aplicar, crearRonda, reproducir } from '@pila/core';
+import { CONFIG_INICIAL, reproducir } from '@pila/core';
 import type { Accion, Config, Estado, Evento } from '@pila/core';
+import { BOT_CICLICO } from './bots/ciclico.ts';
+import { jugarConBot } from './jugar.ts';
 
 /** Resultado de jugar una ronda de ejemplo y reproducirla. */
 export type RondaJugada = {
@@ -18,7 +20,7 @@ export type RondaJugada = {
 /**
  * Juega una ronda completa con un bot determinista sin azar propio y comprueba que es reproducible.
  *
- * El bot coloca cada grano sin colocar en la siguiente celda de un recorrido cíclico por filas
+ * Usa `BOT_CICLICO`: coloca cada grano sin colocar en la siguiente celda de un recorrido cíclico por filas
  * (el recorrido continúa entre tiradas) y confirma cuando la mano está completa.
  *
  * @param semilla Semilla de 32 bits sin signo de la ronda.
@@ -27,30 +29,7 @@ export type RondaJugada = {
  * @throws Error si la configuración es inválida o una acción del bot es rechazada; RangeError si la semilla no es válida.
  */
 export function jugarRonda(semilla: number, config: Config = CONFIG_INICIAL): RondaJugada {
-  const ronda = crearRonda(config, semilla);
-  if (!ronda.ok) throw new Error(`configuración inválida: ${ronda.error.campo}: ${ronda.error.motivo}`);
-
-  let estado = ronda.valor.estado;
-  const eventos: Evento[] = [...ronda.valor.eventos];
-  const acciones: Accion[] = [];
-  const jugar = (accion: Accion): void => {
-    const paso = aplicar(estado, accion);
-    if (!paso.ok) throw new Error(`acción rechazada: ${JSON.stringify(accion)} → ${JSON.stringify(paso.error)}`);
-    acciones.push(accion);
-    estado = paso.valor.estado;
-    eventos.push(...paso.valor.eventos);
-  };
-
-  let cursor = 0;
-  while (estado.fase === 'colocando') {
-    for (const [indiceMano, grano] of estado.mano.entries()) {
-      if (grano.celda !== null) continue;
-      const celda = cursor % (config.lado * config.lado);
-      cursor++;
-      jugar({ tipo: 'Colocar', indiceMano, x: celda % config.lado, y: Math.floor(celda / config.lado) });
-    }
-    jugar({ tipo: 'Confirmar' });
-  }
+  const { estado, eventos, acciones } = jugarConBot(config, semilla, BOT_CICLICO);
 
   const repeticion = reproducir(config, semilla, acciones);
   const reproducible = repeticion.ok && isDeepStrictEqual(repeticion.valor, { estado, eventos });
