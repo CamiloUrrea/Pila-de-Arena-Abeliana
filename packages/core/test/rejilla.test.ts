@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { crearRejilla, dentro, leerCelda } from '../src/index.ts';
+import { crearRejilla, dentro, leerCelda } from '../src/rejilla.ts';
 import { congelar } from './ayudantes.ts';
 
 describe('rejilla', () => {

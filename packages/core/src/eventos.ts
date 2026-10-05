@@ -37,6 +37,7 @@ export type AdicionAplicada = {
   readonly cantidad: number;
 };
 
+/** Empieza la oleada `k` (desde 1 en cada tirada) con las celdas inestables al inicio. */
 export type OleadaIniciada = {
   readonly tipo: 'OleadaIniciada';
   readonly k: number;
@@ -44,6 +45,7 @@ export type OleadaIniciada = {
   readonly celdas: readonly Coordenada[];
 };
 
+/** La celda `(x, y)` se derrumba en la oleada `k`: pierde 4 granos y envía uno en cada dirección. */
 export type Derrumbe = { readonly tipo: 'Derrumbe'; readonly k: number; readonly x: number; readonly y: number };
 
 /** Grano que sale de la rejilla desde la celda `(x, y)`, que se derrumba. `puntos` en centésimas. */
@@ -56,6 +58,7 @@ export type GranoFuera = {
   readonly puntos: number;
 };
 
+/** Fin de la oleada `k` con sus totales; los puntos se suman al medidor en este momento. */
 export type OleadaTerminada = {
   readonly tipo: 'OleadaTerminada';
   readonly k: number;

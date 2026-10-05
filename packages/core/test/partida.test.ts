@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { aplicar, deserializar, reproducir, serializar, validarEstado } from '../src/index.ts';
-import type { Accion, Celdas, Estado, Evento } from '../src/index.ts';
+import type { Accion, Estado, Evento } from '../src/index.ts';
+import type { Celdas } from '../src/tipos.ts';
 import { arbEscenario, jugar, rondaDe } from './bot.ts';
 import type { Partida } from './bot.ts';
 

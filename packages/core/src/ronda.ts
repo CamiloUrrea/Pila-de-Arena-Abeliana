@@ -5,10 +5,14 @@ import type { Config, ErrorConfig, Estado, Resultado } from './tipos.ts';
 import { validarConfig } from './validacion.ts';
 
 /**
- * Estado inicial de una ronda: valida la configuración, siembra la rejilla por filas con el flujo `siembra`,
- * baraja el mazo y roba la primera mano con el flujo `mazo`, y emite `ManoRobada`.
- * Una configuración inválida devuelve su error; una semilla inválida lanza el `RangeError` de `derivarFlujo`.
- * No muta la entrada: el estado guarda una copia de la configuración.
+ * Crea el estado inicial de una ronda: siembra la rejilla por filas con el flujo `siembra`, baraja el mazo
+ * y roba la primera mano con el flujo `mazo`.
+ *
+ * @param config Configuración de la ronda; se valida con `validarConfig`.
+ * @param semilla Entero de 0 a 2^32−1 del que salen todos los flujos de azar.
+ * @returns `{ estado, eventos }` con fase `colocando`, todas las tiradas, 0 puntos y un único `ManoRobada`;
+ *   o el `ErrorConfig` de una configuración inválida. El estado guarda una copia de la configuración.
+ * @throws RangeError si la semilla no es un entero de 0 a 2^32−1 (error de programación).
  */
 export function crearRonda(
   config: Config,

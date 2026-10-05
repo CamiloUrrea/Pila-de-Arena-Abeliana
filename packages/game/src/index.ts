@@ -1,4 +1,2 @@
-import { NUCLEO_LISTO } from '@pila/core';
-
-/** Marcador provisional: comprueba que el enlace con @pila/core resuelve. */
-export const NUCLEO_ENLAZADO: boolean = NUCLEO_LISTO;
+/** Paquete del juego: la interfaz gráfica llega en hitos posteriores y usará solo la interfaz pública de @pila/core. */
+export {};

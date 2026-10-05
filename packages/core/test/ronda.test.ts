@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import {
-  crearMazo,
-  crearRonda,
-  derivarFlujo,
-  deserializar,
-  enteroEnRango,
-  robarMano,
-  serializar,
-  validarEstado,
-} from '../src/index.ts';
+import { crearRonda, derivarFlujo, deserializar, enteroEnRango, serializar, validarEstado } from '../src/index.ts';
+import { crearMazo, robarMano } from '../src/mazo.ts';
 import type { Config, Estado, Evento } from '../src/index.ts';
 import { arbConfig, congelar } from './ayudantes.ts';
 

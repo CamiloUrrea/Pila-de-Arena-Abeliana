@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolverOleadas } from '../src/index.ts';
-import type { Celdas, Evento, ParametrosOleadas, ResultadoOleadas } from '../src/index.ts';
+import { resolverOleadas } from '../src/oleadas.ts';
+import type { Evento } from '../src/index.ts';
+import type { ParametrosOleadas, ResultadoOleadas } from '../src/oleadas.ts';
+import type { Celdas } from '../src/tipos.ts';
 import { congelar } from './ayudantes.ts';
 
 const BASE: ParametrosOleadas = { lado: 3, umbral: 4, multiplicadorPorOleada: 10, topeOleadas: 1000 };

@@ -1,5 +1,7 @@
 import fc from 'fast-check';
-import { CONFIG_INICIAL, FASES, TIPOS_GRANO, crearRejilla } from '../src/index.ts';
+import { CONFIG_INICIAL } from '../src/index.ts';
+import { crearRejilla } from '../src/rejilla.ts';
+import { FASES, TIPOS_GRANO } from '../src/tipos.ts';
 import type { Config, Estado, EstadoFlujo, GranoMano, TipoGrano } from '../src/index.ts';
 
 /** Lista de tipos con la composición de `mazo`, en el orden de `TIPOS_GRANO`. */

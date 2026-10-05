@@ -26,4 +26,10 @@ pnpm check
 
 No hay paso de compilación: Vitest y Node 24 ejecutan el TypeScript directamente.
 
-Más contexto en `docs/especificacion-nucleo.md` y `docs/versiones.md`.
+Para jugar una ronda de ejemplo con un bot determinista y comprobar que es reproducible:
+
+```sh
+pnpm --filter @pila/sim ejemplo -- 42
+```
+
+Más contexto en `docs/api-nucleo.md` (interfaz pública del núcleo), `docs/especificacion-nucleo.md`, `docs/azar.md` y `docs/versiones.md`.

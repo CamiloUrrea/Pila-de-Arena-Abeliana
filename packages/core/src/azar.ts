@@ -27,9 +27,14 @@ function mezclar(z: number): number {
 }
 
 /**
- * Estado inicial del flujo `nombre` para `semilla` (entero de 0 a 2^32−1).
+ * Deriva el estado inicial del flujo de azar `nombre` a partir de la semilla de la ronda.
  * Las cuatro palabras mezclan entradas consecutivas de splitmix32, que son distintas entre sí;
  * como la mezcla es biyectiva, como mucho una palabra puede ser 0 y el estado nunca es nulo.
+ *
+ * @param semilla Entero de 0 a 2^32−1.
+ * @param nombre Nombre del flujo; flujos distintos son independientes.
+ * @returns El estado del flujo.
+ * @throws RangeError si la semilla no es un entero de 0 a 2^32−1.
  */
 export function derivarFlujo(semilla: number, nombre: NombreFlujo): EstadoFlujo {
   if (!Number.isInteger(semilla) || semilla < 0 || semilla >= DOS_A_LA_32) {
@@ -40,7 +45,12 @@ export function derivarFlujo(semilla: number, nombre: NombreFlujo): EstadoFlujo 
   return [palabra(1), palabra(2), palabra(3), palabra(4)];
 }
 
-/** Siguiente salida de 32 bits de xoshiro128** y el estado siguiente. */
+/**
+ * Avanza un flujo xoshiro128** 1.1.
+ *
+ * @param flujo Estado actual del flujo; no se modifica.
+ * @returns La salida, un entero de 0 a 2^32−1, y el estado siguiente.
+ */
 export function siguienteU32(flujo: EstadoFlujo): readonly [valor: number, siguiente: EstadoFlujo] {
   const [s0, s1, s2, s3] = flujo;
   const valor = Math.imul(rotl(Math.imul(s1, 5) >>> 0, 7), 9) >>> 0;
@@ -55,7 +65,12 @@ export function siguienteU32(flujo: EstadoFlujo): readonly [valor: number, sigui
 /**
  * Entero uniforme en `[min, max]` (inclusivo), sin sesgo de módulo.
  * Rechazo: con n valores se aceptan las salidas u < 2^32 − (2^32 mod n) y se devuelve min + (u mod n).
- * Un rango de un solo valor no consume el flujo.
+ *
+ * @param flujo Estado actual del flujo; no se modifica.
+ * @param min Límite inferior, entero seguro.
+ * @param max Límite superior, entero seguro; el rango tiene como mucho 2^32 valores.
+ * @returns El valor y el estado siguiente. Un rango de un solo valor no consume el flujo.
+ * @throws RangeError si los límites no son enteros seguros, si `min > max` o si el rango supera 2^32 valores.
  */
 export function enteroEnRango(flujo: EstadoFlujo, min: number, max: number): readonly [valor: number, siguiente: EstadoFlujo] {
   if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
@@ -76,8 +91,11 @@ export function enteroEnRango(flujo: EstadoFlujo, min: number, max: number): rea
 }
 
 /**
- * Fisher–Yates: para i de n−1 a 1, j = enteroEnRango(0, i) e intercambio de i y j.
- * Devuelve un arreglo nuevo; con 0 o 1 elementos no consume el flujo.
+ * Baraja con Fisher–Yates: para i de n−1 a 1, j = enteroEnRango(0, i) e intercambio de i y j.
+ *
+ * @param items Elementos que se barajan; no se modifican.
+ * @param flujo Estado actual del flujo; no se modifica.
+ * @returns Un arreglo nuevo barajado y el estado siguiente. Con 0 o 1 elementos no consume el flujo.
  */
 export function barajar<T>(items: readonly T[], flujo: EstadoFlujo): readonly [barajado: T[], siguiente: EstadoFlujo] {
   const salida = [...items];

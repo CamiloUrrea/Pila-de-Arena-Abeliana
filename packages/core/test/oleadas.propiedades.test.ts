@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CONFIG_INICIAL, resolverOleadas } from '../src/index.ts';
-import type { Celdas, ParametrosOleadas, ResultadoOleadas } from '../src/index.ts';
+import { CONFIG_INICIAL } from '../src/index.ts';
+import { resolverOleadas } from '../src/oleadas.ts';
+import type { ParametrosOleadas, ResultadoOleadas } from '../src/oleadas.ts';
+import type { Celdas } from '../src/tipos.ts';
 import { arbCargaAlcanzable, arbRejillaArbitraria, eleccionCiclica, resolverUnoAUno } from './oraculos.ts';
 import type { Carga } from './oraculos.ts';
 

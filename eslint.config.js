@@ -12,6 +12,25 @@ export default defineConfig(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  // Aislamiento: sim y game solo usan la interfaz pública de @pila/core (su index), nunca sus rutas internas.
+  // El campo `exports` de core ya bloquea `@pila/core/...`; esta regla cierra además las rutas relativas.
+  {
+    files: ['packages/sim/**/*.ts', 'packages/game/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { regex: '^@pila/core/', message: 'Importa solo «@pila/core»: sus módulos internos no son interfaz pública.' },
+            {
+              regex: '^(\\.{1,2}/)+(.+/)?core(/|$)',
+              message: 'No importes core por ruta relativa: usa «@pila/core» (interfaz pública).',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Pureza del núcleo: sin azar global, sin reloj y sin dependencias.
   {
     files: ['packages/core/src/**/*.ts'],

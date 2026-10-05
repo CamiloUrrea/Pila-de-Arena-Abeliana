@@ -21,7 +21,13 @@ function canonico(valor: unknown): string {
   return JSON.stringify(valor);
 }
 
-/** Serializa el estado como JSON canónico `{"estado":{...},"formato":1}`. No modifica su entrada. */
+/**
+ * Serializa un estado como JSON canónico (claves ordenadas) con la envoltura `{"estado":{…},"formato":1}`.
+ * Incluye el estado del azar, así que la partida puede seguir exactamente donde quedó.
+ *
+ * @param estado Estado que se serializa; no se modifica.
+ * @returns El texto. El mismo estado da siempre el mismo texto, sea cual sea el orden de sus claves.
+ */
 export function serializar(estado: Estado): string {
   const { config } = estado;
   return canonico({
@@ -146,7 +152,14 @@ const leerEstado = registro({
   rng: registro({ siembra: flujo, mazo: flujo }),
 });
 
-/** Inversa exacta de `serializar`. Nunca lanza: los fallos vuelven como errores tipados. */
+/**
+ * Inversa exacta de `serializar`: comprueba la forma del JSON a mano y valida el estado con `validarEstado`.
+ *
+ * @param texto Texto producido por `serializar`.
+ * @returns El estado, o `JsonInvalido`, `FormatoDesconocido` (envoltura distinta de la del formato 1) o
+ *   `EstadoInvalido` con campo y motivo (campo faltante, desconocido o mal tipado, o invariante roto).
+ *   Nunca lanza.
+ */
 export function deserializar(texto: string): Resultado<Estado, ErrorDeserializacion> {
   let json: unknown;
   try {

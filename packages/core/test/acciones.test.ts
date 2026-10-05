@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { accionesLegales, aplicar, crearRejilla, crearRonda, reproducir, validarEstado } from '../src/index.ts';
-import type { Accion, Celdas, Config, Estado, Evento, GranoMano } from '../src/index.ts';
+import { accionesLegales, aplicar, crearRonda, reproducir, validarEstado } from '../src/index.ts';
+import { crearRejilla } from '../src/rejilla.ts';
+import type { Accion, Config, Estado, Evento, GranoMano } from '../src/index.ts';
+import type { Celdas } from '../src/tipos.ts';
 import { arbEscenario, jugar, rondaDe } from './bot.ts';
 import { congelar, conMano, estadoDePrueba } from './ayudantes.ts';
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CONFIG_INICIAL, barajar, crearMazo, derivarFlujo, robarMano } from '../src/index.ts';
+import { CONFIG_INICIAL, barajar, derivarFlujo } from '../src/index.ts';
+import { crearMazo, robarMano } from '../src/mazo.ts';
 import type { Config, EstadoFlujo, GranoMano, TipoGrano } from '../src/index.ts';
 import { congelar } from './ayudantes.ts';
 

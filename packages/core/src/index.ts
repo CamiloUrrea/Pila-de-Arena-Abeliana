@@ -1,12 +1,33 @@
-/** Marcador provisional hasta que exista el núcleo real. */
-export const NUCLEO_LISTO = true;
+/**
+ * Interfaz pública de `@pila/core`: el núcleo puro y determinista del juego de la pila de arena abeliana.
+ *
+ * Esta lista es estable y la protege `test/interfaz.test.ts`. Cualquier cambio (añadir, quitar o renombrar)
+ * es un cambio de interfaz y exige actualizar esa prueba y `docs/api-nucleo.md`.
+ * Todo lo demás de `src/` es interno.
+ *
+ * @packageDocumentation
+ */
 
+// Ronda y acciones.
+export { crearRonda } from './ronda.ts';
+export { accionesLegales, aplicar, reproducir } from './acciones.ts';
+export type { Accion, ErrorAccion, ErrorReproduccion, MotivoIlegal } from './acciones.ts';
+
+// Serialización y validación.
+export { deserializar, serializar } from './serializacion.ts';
+export { validarConfig, validarEstado } from './validacion.ts';
+
+// Azar, para bots y herramientas.
+export { barajar, derivarFlujo, enteroEnRango, siguienteU32 } from './azar.ts';
+
+// Datos.
+export { CONFIG_INICIAL } from './data/config-inicial.ts';
+export { DEFINICIONES_GRANOS } from './data/granos.ts';
+
+// Tipos.
+export type { ErrorResolucion } from './oleadas.ts';
 export type {
-  AdicionGrano,
-  Celdas,
-  Colocacion,
   Config,
-  Coordenada,
   DefinicionGrano,
   ErrorConfig,
   ErrorDeserializacion,
@@ -20,13 +41,6 @@ export type {
   Resultado,
   TipoGrano,
 } from './tipos.ts';
-export { FASES, NOMBRES_FLUJO, TIPOS_GRANO } from './tipos.ts';
-export { CONFIG_INICIAL } from './data/config-inicial.ts';
-export { DEFINICIONES_GRANOS } from './data/granos.ts';
-export { DIRECCIONES, crearRejilla, dentro, leerCelda } from './rejilla.ts';
-export { validarConfig, validarEstado } from './validacion.ts';
-export { deserializar, serializar } from './serializacion.ts';
-export { barajar, derivarFlujo, enteroEnRango, siguienteU32 } from './azar.ts';
 export type {
   AdicionAplicada,
   ColocacionDeshecha,
@@ -43,14 +57,3 @@ export type {
   TiradaConfirmada,
   TiradaResuelta,
 } from './eventos.ts';
-export { GRANOS_POR_DERRUMBE, resolverOleadas } from './oleadas.ts';
-export type { ErrorResolucion, ParametrosOleadas, ResultadoOleadas } from './oleadas.ts';
-export { aplicarAdiciones } from './adiciones.ts';
-export type { ResultadoAdiciones } from './adiciones.ts';
-export { crearMazo, robarMano } from './mazo.ts';
-export type { ResultadoRobo } from './mazo.ts';
-export { resolverTirada } from './tirada.ts';
-export type { ResolucionTirada } from './tirada.ts';
-export { crearRonda } from './ronda.ts';
-export { accionesLegales, aplicar, reproducir } from './acciones.ts';
-export type { Accion, ErrorAccion, ErrorReproduccion, MotivoIlegal } from './acciones.ts';

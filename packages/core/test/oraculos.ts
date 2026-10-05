@@ -1,5 +1,6 @@
 import fc from 'fast-check';
-import type { Celdas, Coordenada, TipoGrano } from '../src/index.ts';
+import type { TipoGrano } from '../src/index.ts';
+import type { Celdas, Coordenada } from '../src/tipos.ts';
 
 // Oráculos y generadores para las pruebas de propiedades de la resolución.
 // No reutilizan código de src/oleadas.ts ni de src/rejilla.ts: son independientes a propósito.

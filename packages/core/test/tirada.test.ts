@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CONFIG_INICIAL, crearRejilla, resolverTirada, validarEstado } from '../src/index.ts';
-import type { Celdas, Config, Estado, GranoMano, ResolucionTirada } from '../src/index.ts';
+import { CONFIG_INICIAL, validarEstado } from '../src/index.ts';
+import { crearRejilla } from '../src/rejilla.ts';
+import { resolverTirada } from '../src/tirada.ts';
+import type { Config, Estado, GranoMano } from '../src/index.ts';
+import type { Celdas } from '../src/tipos.ts';
+import type { ResolucionTirada } from '../src/tirada.ts';
 import { arbEstadoListoParaConfirmar, congelar, conMano, estadoDePrueba } from './ayudantes.ts';
 
 const suma = (celdas: Celdas): number => celdas.flat().reduce((a, b) => a + b, 0);

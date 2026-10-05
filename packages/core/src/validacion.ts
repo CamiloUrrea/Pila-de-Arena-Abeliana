@@ -6,7 +6,14 @@ function falla<T>(campo: string, motivo: string): Resultado<T, { campo: string; 
   return { ok: false, error: { campo, motivo } };
 }
 
-/** Comprueba que una configuración cumple las reglas de la especificación. */
+/**
+ * Comprueba una configuración: enteros seguros, `lado ≥ 1`, `umbral` 4 (fijo en H1), `tiradas ≥ 1`,
+ * `1 ≤ tamanoMano ≤` total del mazo, `0 ≤ siembra.min ≤ siembra.max < umbral`, cantidades del mazo ≥ 0,
+ * `meta ≥ 1`, `multiplicadorPorOleada ≥ 0` y `topeOleadas ≥ 1`.
+ *
+ * @param config Configuración que se comprueba.
+ * @returns La misma configuración, o el primer `ErrorConfig` con la ruta del campo y el motivo. Nunca lanza.
+ */
 export function validarConfig(config: Config): Resultado<Config, ErrorConfig> {
   const enteros: readonly (readonly [string, number])[] = [
     ['lado', config.lado],
@@ -47,7 +54,15 @@ export function validarConfig(config: Config): Resultado<Config, ErrorConfig> {
   return { ok: true, valor: config };
 }
 
-/** Comprueba los invariantes de un estado (sección «Invariantes y pruebas»). */
+/**
+ * Comprueba los invariantes de un estado (sección «Invariantes y pruebas»): configuración válida, rejilla
+ * `lado × lado` de enteros ≥ 0, contadores enteros ≥ 0, fase coherente con puntos y tiradas, granos colocados
+ * dentro de la rejilla, `ordenColocacion` con exactamente los granos colocados, composición del mazo
+ * conservada y flujos de azar válidos.
+ *
+ * @param estado Estado que se comprueba.
+ * @returns El mismo estado, o el primer `ErrorEstado` con la ruta del campo y el motivo. Nunca lanza.
+ */
 export function validarEstado(estado: Estado): Resultado<Estado, ErrorEstado> {
   const config = validarConfig(estado.config);
   if (!config.ok) return falla(`config.${config.error.campo}`, config.error.motivo);

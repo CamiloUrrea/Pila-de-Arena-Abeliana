@@ -6,11 +6,16 @@ import { crearRonda } from './ronda.ts';
 import { resolverTirada } from './tirada.ts';
 import type { Config, ErrorConfig, Estado, Resultado } from './tipos.ts';
 
+/**
+ * Acción del jugador. `Colocar` asigna provisionalmente el grano `indiceMano` de la mano a la celda `(x, y)`;
+ * `Deshacer` quita la colocación más reciente de la tirada; `Confirmar` resuelve la tirada con la mano colocada.
+ */
 export type Accion =
   | { readonly tipo: 'Colocar'; readonly indiceMano: number; readonly x: number; readonly y: number }
   | { readonly tipo: 'Deshacer' }
   | { readonly tipo: 'Confirmar' };
 
+/** Motivo de una acción ilegal. Se comprueban en este orden: fase, índice, grano, celda, deshacer y mano. */
 export type MotivoIlegal =
   | 'FaseIncorrecta'
   | 'IndiceManoInvalido'
@@ -19,8 +24,10 @@ export type MotivoIlegal =
   | 'NadaQueDeshacer'
   | 'ManoIncompleta';
 
+/** Error de `aplicar`: una acción ilegal, o una resolución que superó `topeOleadas` (`ResolucionNoTermino`). */
 export type ErrorAccion = { readonly tipo: 'AccionIlegal'; readonly motivo: MotivoIlegal } | ErrorResolucion;
 
+/** Error de `reproducir`: configuración inválida, o la acción número `indice` (desde 0) falló con `error`. */
 export type ErrorReproduccion =
   | { readonly tipo: 'ConfigInvalida'; readonly error: ErrorConfig }
   | { readonly tipo: 'AccionFallida'; readonly indice: number; readonly error: ErrorAccion };
@@ -32,8 +39,16 @@ function ilegal(motivo: MotivoIlegal): Resultado<Paso, ErrorAccion> {
 }
 
 /**
- * Aplica una acción a un estado válido. Devuelve el estado siguiente y sus eventos, o un error tipado
- * que deja el estado intacto, sin consumir azar ni emitir eventos. Nunca lanza ni muta la entrada.
+ * Aplica una acción a un estado y devuelve el estado siguiente y sus eventos.
+ *
+ * `Confirmar` resuelve la tirada (adiciones, oleadas, puntos y mano a `usados`) y evalúa su fin: gana si
+ * `puntos >= meta` (aunque no queden tiradas), pierde si no quedan tiradas y, si no, roba una mano nueva.
+ *
+ * @param estado Estado válido, como los que producen `crearRonda`, `aplicar` y `deserializar`. Con un estado
+ *   inválido construido a mano el comportamiento no está definido.
+ * @param accion Acción que se aplica.
+ * @returns `{ estado, eventos }`, o un `ErrorAccion`: `AccionIlegal` con su motivo o `ResolucionNoTermino`.
+ *   Un error deja el estado intacto, sin consumir azar ni emitir eventos. Nunca lanza ni muta la entrada.
  */
 export function aplicar(estado: Estado, accion: Accion): Resultado<Paso, ErrorAccion> {
   if (estado.fase !== 'colocando') return ilegal('FaseIncorrecta');
@@ -135,8 +150,12 @@ function confirmar(estado: Estado): Resultado<Paso, ErrorAccion> {
 }
 
 /**
- * Acciones que `aplicar` acepta, en orden fijo: las `Colocar` por índice de mano y, para cada uno,
- * celdas por filas; después `Deshacer` si hay algo que deshacer y `Confirmar` si todo está colocado.
+ * Lista las acciones que `aplicar` acepta en este estado, para bots, interfaces y pruebas.
+ *
+ * @param estado Estado válido.
+ * @returns En orden fijo: las `Colocar` por índice de mano ascendente y, para cada uno, celdas por filas;
+ *   después `Deshacer` si hay algo que deshacer y `Confirmar` si todos los granos están colocados.
+ *   Vacía si la fase no es `colocando`. `ResolucionNoTermino` no se anticipa: `Confirmar` se lista igualmente.
  */
 export function accionesLegales(estado: Estado): readonly Accion[] {
   if (estado.fase !== 'colocando') return [];
@@ -153,7 +172,16 @@ export function accionesLegales(estado: Estado): readonly Accion[] {
   return acciones;
 }
 
-/** Juega una partida: `crearRonda` y luego las acciones en orden. Ante un error devuelve el índice de la acción. */
+/**
+ * Reproduce una partida: `crearRonda(config, semilla)` y luego `aplicar` con cada acción, en orden.
+ *
+ * @param config Configuración de la ronda.
+ * @param semilla Entero de 0 a 2^32−1.
+ * @param acciones Acciones de la partida.
+ * @returns El estado final y todos los eventos (los de `crearRonda` seguidos de los de cada acción), o
+ *   `ConfigInvalida` o `AccionFallida` con el índice de la primera acción que falla.
+ * @throws RangeError si la semilla no es un entero de 0 a 2^32−1 (error de programación).
+ */
 export function reproducir(
   config: Config,
   semilla: number,

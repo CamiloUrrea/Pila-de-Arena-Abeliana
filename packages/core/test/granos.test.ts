@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { CONFIG_INICIAL, DEFINICIONES_GRANOS, TIPOS_GRANO, aplicarAdiciones, crearRejilla, resolverOleadas } from '../src/index.ts';
-import type { Celdas, Colocacion, TipoGrano } from '../src/index.ts';
+import { CONFIG_INICIAL, DEFINICIONES_GRANOS } from '../src/index.ts';
+import { aplicarAdiciones } from '../src/adiciones.ts';
+import { resolverOleadas } from '../src/oleadas.ts';
+import { crearRejilla } from '../src/rejilla.ts';
+import { TIPOS_GRANO } from '../src/tipos.ts';
+import type { TipoGrano } from '../src/index.ts';
+import type { Celdas, Colocacion } from '../src/tipos.ts';
 import { congelar } from './ayudantes.ts';
 import { sumarAdiciones } from './oraculos.ts';
 

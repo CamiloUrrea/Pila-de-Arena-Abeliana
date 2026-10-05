@@ -23,6 +23,10 @@ export type ResultadoOleadas = {
   readonly derrumbesPorCelda: Celdas;
 };
 
+/**
+ * La resolución superó `topeOleadas` con celdas aún inestables. En un montón finito no ocurre con cargas
+ * alcanzables: el tope detecta errores. `aplicar` la devuelve sin cambiar el estado.
+ */
 export type ErrorResolucion = { readonly tipo: 'ResolucionNoTermino'; readonly topeOleadas: number };
 
 /**
