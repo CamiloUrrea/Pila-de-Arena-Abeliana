@@ -1,4 +1,13 @@
+import type { Direccion } from './eventos.ts';
 import type { Celdas } from './tipos.ts';
+
+/** Direcciones de reparto en el orden de la especificación, con su desplazamiento (y crece hacia abajo). */
+export const DIRECCIONES: readonly { readonly direccion: Direccion; readonly dx: number; readonly dy: number }[] = [
+  { direccion: 'arriba', dx: 0, dy: -1 },
+  { direccion: 'derecha', dx: 1, dy: 0 },
+  { direccion: 'abajo', dx: 0, dy: 1 },
+  { direccion: 'izquierda', dx: -1, dy: 0 },
+];
 
 /** Crea una rejilla nueva de `lado × lado` con todas las celdas a `valor`. */
 export function crearRejilla(lado: number, valor = 0): number[][] {

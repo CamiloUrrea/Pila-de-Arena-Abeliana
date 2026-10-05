@@ -19,7 +19,10 @@ export type {
 } from './tipos.ts';
 export { FASES, NOMBRES_FLUJO, TIPOS_GRANO } from './tipos.ts';
 export { CONFIG_INICIAL } from './data/config-inicial.ts';
-export { crearRejilla, dentro, leerCelda } from './rejilla.ts';
+export { DIRECCIONES, crearRejilla, dentro, leerCelda } from './rejilla.ts';
 export { validarConfig, validarEstado } from './validacion.ts';
 export { deserializar, serializar } from './serializacion.ts';
 export { barajar, derivarFlujo, enteroEnRango, siguienteU32 } from './azar.ts';
+export type { Derrumbe, Direccion, Evento, GranoFuera, OleadaIniciada, OleadaTerminada } from './eventos.ts';
+export { GRANOS_POR_DERRUMBE, resolverOleadas } from './oleadas.ts';
+export type { ErrorResolucion, ParametrosOleadas, ResultadoOleadas } from './oleadas.ts';
