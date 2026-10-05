@@ -7,7 +7,10 @@
     "node": "24.21.0"
   },
   "scripts": {
-    "test": "vitest run --reporter=verbose"
+    "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/sim && tsc -p packages/game",
+    "lint": "eslint --max-warnings=0 .",
+    "test": "vitest run --reporter=verbose",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
     "eslint": "10.12.0",
