@@ -8,7 +8,8 @@
   },
   "scripts": {
     "ejemplo": "node src/ejemplo-ronda.ts",
-    "simular": "node src/simular.ts"
+    "simular": "node src/simular.ts",
+    "informe": "node src/informe.ts"
   },
   "dependencies": {
     "@pila/core": "workspace:*"

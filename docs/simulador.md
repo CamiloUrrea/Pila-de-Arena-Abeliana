@@ -115,3 +115,47 @@ Ningún bot de esta lista usa `Deshacer`. Todos colocan primero el grano sin col
 | `cargador` | «Llena celdas hasta 3 y detona al final». En la última tirada coloca cada grano en la celda más cercana al centro (mínimo de `\|2x − (lado−1)\| + \|2y − (lado−1)\|`, empate por filas). En las demás proyecta el efecto del grano con `DEFINICIONES_GRANOS`, contando las colocaciones provisionales de la tirada, y entre las celdas donde nadie llega al umbral elige la de mayor carga proyectada en la propia celda (empate por filas). Si no hay ninguna, detona en la más cercana al centro. Sin azar. | Una estrategia de acumulación: cargar sin derrumbar para provocar una gran avalancha final. Mide si el multiplicador de cadena premia esperar. | Solo mira una tirada de profundidad: proyecta las adiciones, no resuelve oleadas ni anticipa la mano siguiente. La detonación es una heurística sencilla: el centro y la última tirada, sin buscar la celda que más cascada provoca. Si una detonación forzada deja una celda provisional en el umbral, el resto de la tirada ya no encuentra celdas válidas y también detona. |
 
 Con `CONFIG_INICIAL` (meta 1000) y 20000 rondas, los cinco bots ganan el 100 % de las rondas: la meta inicial está por calibrar en H2 (T2.5), y por ahora no distingue entre bots.
+
+## Informe de métricas de balance
+
+```sh
+pnpm --filter @pila/sim informe -- resultados/a.jsonl resultados/b.jsonl [--salida informe.md] [--estricto]
+```
+
+Lee uno o varios archivos JSONL del simulador, línea a línea (sin cargarlos enteros en memoria), y escribe por pantalla un informe en Markdown. Con `--salida` también lo guarda en ese archivo y crea la carpeta si falta.
+
+- **Códigos de salida:** `0` si todo fue bien; `1` con `--estricto` si salta alguna alarma; `2` si un archivo no se puede leer, está vacío, no empieza por la cabecera, tiene un `formato` distinto de 1 o contiene una línea mal formada (el mensaje indica el archivo y la línea), y también ante un error de uso.
+- **Determinismo:** el informe no lleva marcas de tiempo y usa los nombres de archivo, no sus rutas, así que los mismos archivos dan el mismo texto.
+
+**Agrupación.** Las rondas se agrupan por bot y configuración, la de la cabecera. Una semilla repetida dentro de un mismo grupo (por ejemplo, dos lotes que se solapan) es un error, porque contaría dos veces la misma ronda. Cada configuración se etiqueta con los campos que distinguen a los grupos (por ejemplo `meta`) más `lado`, `tiradas`, `tamanoMano` y `multiplicadorPorOleada`. Los grupos se ordenan por configuración y, dentro de ella, por nombre de bot.
+
+### Métricas
+
+| Sección | Métrica | Definición |
+| --- | --- | --- |
+| Resumen | Archivos y rondas | Archivos leídos con su bot y sus rondas, y rondas por grupo. |
+| Victorias | Victorias e intervalo | Ganadas entre rondas, con su intervalo de Wilson al 95 %. Si hay más de una configuración y más de un bot, también una tabla cruzada de victorias: bots en filas y configuraciones en columnas. |
+| Ventaja del cargador sobre el borde | Diferencia por pares | En cada configuración con los dos bots, se emparejan las rondas por `semilla` (solo la intersección, cuyo tamaño se indica si los conjuntos difieren). Para cada semilla, `d = ganaCargador − ganaBorde` (1, 0 o −1). Se informa la media de `d` con su intervalo al 95 %. |
+| Puntos de desborde | Media, desviación, mínimo y máximo | De los puntos finales de cada ronda, en puntos (centésimas entre 100). Los grupos con rondas ganadas llevan la nota: **los puntos de las rondas ganadas están truncados por la victoria; para medir la varianza real usa una meta inalcanzable** (por ejemplo `--set meta=1000000`). |
+| Avalanchas | Tamaño | Derrumbes de una tirada. Sobre las tiradas con al menos un derrumbe: número, media, desviación, mediana, percentil 90, máximo, histograma en los tramos 1–2, 3–5, 6–10, 11–20 y 21 o más, y la parte del total de derrumbes que causa el 10 % de avalanchas más grandes (las ⌈0,1·n⌉ mayores). También el porcentaje de tiradas sin ningún derrumbe. Todo se calcula con un recuento por tamaño, sin guardar cada tirada. |
+| Oleadas máximas | Máximo y tope | El máximo de oleadas en una sola tirada y su fracción de `topeOleadas`. |
+| Bonus | — | No disponible hasta H5. |
+
+### Fórmulas
+
+- **Intervalo de Wilson al 95 %**, con `p = ganadas / n` y `z = 1,96`: centro `(p + z²/2n) / (1 + z²/n)` y semiancho `z / (1 + z²/n) · √(p(1−p)/n + z²/4n²)`. A diferencia del intervalo simple de Wald (`p ± z·√(p(1−p)/n)`), no se sale de [0, 1] y no degenera cuando `p` es 0 o 1.
+- **Diferencia por pares:** media `d̄` de las diferencias e intervalo `d̄ ± z · s/√n`, con `s` la desviación muestral de las diferencias y `n` el número de pares (aproximación normal; con menos de 2 pares no hay intervalo).
+- **Desviación muestral:** `s = √(Σ(xᵢ − x̄)² / (n − 1))`, acumulada en streaming con el algoritmo de Welford.
+- **Percentil por rango más cercano:** el percentil `q` es el elemento de posición `⌈q·n⌉` (desde 1) de los valores ordenados. La mediana es el percentil 0,5 con la misma regla.
+
+### Alarmas
+
+Los umbrales son constantes con nombre en `UMBRALES_ALARMA` (`packages/sim/src/informe.ts`).
+
+| Alarma | Se activa cuando | Umbral |
+| --- | --- | --- |
+| (a) | El bot `aleatorio` gana más del 90 % o menos del 10 % de las rondas de una configuración: es demasiado fácil o demasiado difícil para el suelo de dificultad. | `aleatorioMaximo` 0,9 y `aleatorioMinimo` 0,1 |
+| (b) | La ventaja del cargador sobre el borde no es significativa: el extremo inferior del intervalo de la diferencia por pares es ≤ 0, o no hay pares suficientes para calcularlo. | 0 |
+| (c) | La desviación de los puntos es mayor que la media en un grupo. | — |
+| (d) | Las avalanchas son casi todas del mismo tamaño: coeficiente de variación (desviación entre media) menor que el umbral. | `coeficienteVariacionMinimo` 0,3 |
+| (e) | Las oleadas máximas llegan a una fracción de `topeOleadas` o más. | `fraccionTopeOleadas` 0,5 |
