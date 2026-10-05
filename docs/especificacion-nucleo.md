@@ -1,4 +1,4 @@
-# Especificación del núcleo (v0.6)
+# Especificación del núcleo (v0.7)
 
 > Copia versionada para el repositorio. La fuente de verdad es el documento «MVP - Juego de la Pila de Arena Abeliana», pestaña «Especificación del núcleo». Si la especificación cambia, se vuelve a exportar y se sube de versión.
 
@@ -25,7 +25,7 @@ Las celdas se indexan con x = columna e y = fila, con el origen arriba a la izqu
 | `umbral` | Granos que hacen inestable a una celda | 4 (fijo en H1) |
 | `tiradas` | Tiradas disponibles en la ronda | 5 |
 | `tamanoMano` | Granos robados por tirada | 5 |
-| `siembra` | Mínimo y máximo de granos por celda al empezar | 0 y 2 |
+| `siembra` | Mínimo y máximo de granos por celda al empezar; el máximo debe ser menor que el umbral, para que la rejilla inicial sea estable | 0 y 2 |
 | `mazo` | Cantidad de cada tipo de grano | 20 normales, 6 pesados, 4 explosivos |
 | `meta` | Puntos de desborde necesarios, en centésimas | 1000 (a calibrar en H2) |
 | `multiplicadorPorOleada` | Aumento por oleada, en centésimas | 10 |
@@ -39,6 +39,7 @@ Las celdas se indexan con x = columna e y = fila, con el origen arriba a la izqu
 | `celdas` | Matriz de `lado × lado` enteros mayores o iguales que 0, por filas |
 | `fase` | `colocando`, `ganada` o `perdida` |
 | `mano` | Granos de la mano; cada uno con su tipo y, si ya se colocó en esta tirada, su celda |
+| `ordenColocacion` | Índices de la mano en el orden en que se colocaron en esta tirada; Deshacer quita el último |
 | `mazo` y `usados` | Tipos restantes en orden de robo y tipos ya jugados |
 | `tiradasRestantes` | Entero |
 | `puntos` | Puntos acumulados en la ronda, en centésimas |
@@ -49,7 +50,7 @@ Las celdas se indexan con x = columna e y = fila, con el origen arriba a la izqu
 | Acción | Efecto | Condición |
 | --- | --- | --- |
 | `Colocar(indiceMano, x, y)` | Asigna ese grano de la mano a la celda; es provisional y no cambia las celdas | Fase `colocando`, grano sin colocar y celda dentro de la rejilla |
-| `Deshacer` | Quita la última colocación provisional de la tirada | Hay al menos una colocación |
+| `Deshacer` | Quita la última colocación provisional de la tirada (la más reciente en el tiempo, según ordenColocacion) | Hay al menos una colocación |
 | `Confirmar` | Resuelve la tirada | Fase `colocando` y todos los granos de la mano colocados |
 
 Varios granos pueden ir a la misma celda.
@@ -92,7 +93,7 @@ La interfaz y el sonido solo consumen estos eventos; ninguno de ellos decide nad
 | `ManoRobada` | Tipos de los granos | Al empezar la ronda y tras cada tirada que no la termina |
 | `GranoColocado` | `indiceMano`, `x`, `y` | Al colocar |
 | `ColocacionDeshecha` | `indiceMano` | Al deshacer |
-| `TiradaConfirmada` | Número de tirada | Al empezar `Confirmar` |
+| `TiradaConfirmada` | Número de tirada, contado desde 1 | Al empezar `Confirmar` |
 | `AdicionAplicada` | `x`, `y`, cantidad | Una vez por celda afectada en el paso 1, por filas |
 | `OleadaIniciada` | `k`, celdas inestables | Al empezar cada oleada |
 | `Derrumbe` | `k`, `x`, `y` | Una vez por celda inestable |
@@ -111,7 +112,7 @@ La interfaz del paquete son estas funciones puras, que nunca modifican su entrad
 - `reproducir(config, semilla, acciones)` devuelve el estado final y todos los eventos de una partida.
 - `serializar(estado)` y `deserializar(texto)` son inversas exactas e incluyen el estado del azar. El texto es JSON canónico (claves ordenadas) con la envoltura {"formato":1,"estado":{…}}. deserializar devuelve un resultado tipado y nunca lanza excepciones; sus errores son JsonInvalido, FormatoDesconocido y EstadoInvalido (con campo y motivo).
 
-Una partida queda definida por su configuración, su semilla y su lista de acciones.
+Una partida queda definida por su configuración, su semilla y su lista de acciones. crearRonda valida la configuración y devuelve un error tipado si es inválida.
 
 ## Aleatoriedad
 
@@ -136,7 +137,7 @@ Estas pruebas forman el criterio de cierre de H1. Las de propiedades se escriben
 | Determinismo | Reproducir dos veces la misma partida da estados y eventos idénticos |
 | Idempotencia | Resolver una configuración ya estable no cambia nada ni emite oleadas |
 | Serialización | `deserializar(serializar(e))` es igual a `e`, y seguir jugando tras la ida y vuelta da el mismo resultado que seguir sin ella |
-| Validez del estado | Celdas enteras mayores o iguales que 0, y mazo más mano más usados siempre igual a la composición configurada |
+| Validez del estado | Celdas enteras mayores o iguales que 0, y mazo más mano más usados siempre igual a la composición configurada. Además, la fase ganada exige puntos mayores o iguales que meta; la fase perdida exige puntos menores que meta y 0 tiradas restantes; la fase colocando exige puntos menores que meta y al menos 1 tirada restante; y ordenColocacion lista exactamente los granos colocados, sin repetir |
 | Reciclaje del mazo | Con tamanoMano 6 y 6 tiradas se roban 36 granos de un mazo de 30: la mano se completa con los granos restantes más los usados barajados, y mazo más mano más usados sigue igual a la composición configurada. Un segundo caso, con tamanoMano 7, deja 2 granos restantes al reciclar (cuatro manos de 7 suman 28) y comprueba que se toman antes que los usados barajados |
 | Tope de oleadas | Con un topeOleadas pequeño forzado, la tirada devuelve ResolucionNoTermino y el estado queda idéntico al anterior |
 | Independencia de flujos | Cambiar la composición del mazo no cambia la siembra de la rejilla con la misma semilla |
@@ -193,7 +194,7 @@ Sin oleadas. Los dos vecinos que quedarían fuera de la rejilla no reciben nada 
 
 ## Decisiones confirmadas
 
-Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5.
+Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5, y otra al preparar T1.7.
 
 - **Una oleada, un derrumbe por celda: aprobado.** Una celda con 8 o más granos necesita varias oleadas, y las cargas grandes alargan la cascada. Alternativa descartada: derrumbes múltiples por oleada, que acortan las cascadas y bajan los puntos.
 - **Explosivo en el borde: aprobado.** Los vecinos fuera de la rejilla no reciben nada ni dan puntos. Alternativa descartada: contarlos como granos que salen, que daría puntos sin cascada.
@@ -208,3 +209,4 @@ Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada e
 - **Generador `xoshiro128**` y precondiciones con RangeError: añadido en v0.4.** Se eligió `xoshiro128**` por su periodo de 2^128−1 y por sus vectores de referencia publicados, que permiten verificarlo contra una fuente independiente. Una semilla fuera de rango, un rango vacío o un rango de más de 2^32 valores lanzan RangeError, porque son errores de programación y no caminos de juego. Alternativa descartada: sfc32, igualmente válido pero sin esas ventajas de verificación.
 - **GranoFuera lleva la celda de origen: añadido en v0.5.** Sus coordenadas x e y son las de la celda que se derrumba y la dirección indica por dónde sale el grano, que es lo que necesitan la animación y el sonido. Alternativa descartada: usar la celda vecina fuera de la rejilla, con coordenadas como −1, que complicaría cada consumidor del evento.
 - **Granos como tabla de desplazamientos: añadido en v0.6.** Cada tipo declara sus adiciones como una lista de (dx, dy, cantidad) y lo que cae fuera de la rejilla se ignora, así que añadir un tipo de grano es añadir una fila de datos. Alternativa descartada: una rama de código por tipo, que va contra la regla de granos y bonus como datos. Además, la prueba de reciclaje con tamanoMano 6 no ejercita los granos restantes (cinco manos de 6 vacían justo el mazo de 30), por eso se añadió el caso con tamanoMano 7.
+- **Orden de colocación, coherencia de fase y siembra estable: añadido en v0.7.** El estado guarda ordenColocacion porque sin él Deshacer no sabría cuál fue la última colocación. Las fases se validan contra los puntos y las tiradas, y el máximo de siembra debe ser menor que el umbral para que ninguna ronda empiece con la rejilla inestable. No se exige que la mano tenga exactamente tamanoMano granos, porque el bonus Eco traerá un grano extra. Alternativa descartada: definir Deshacer por el mayor índice de mano, que no coincide con lo que el jugador hizo en último lugar.
