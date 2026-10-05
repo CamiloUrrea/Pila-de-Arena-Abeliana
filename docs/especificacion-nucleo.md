@@ -1,4 +1,4 @@
-# Especificación del núcleo (v0.2)
+# Especificación del núcleo (v0.5)
 
 > Copia versionada para el repositorio. La fuente de verdad es el documento «MVP - Juego de la Pila de Arena Abeliana», pestaña «Especificación del núcleo». Si la especificación cambia, se vuelve a exportar y se sube de versión.
 
@@ -96,7 +96,7 @@ La interfaz y el sonido solo consumen estos eventos; ninguno de ellos decide nad
 | `AdicionAplicada` | `x`, `y`, cantidad | Una vez por celda afectada en el paso 1, por filas |
 | `OleadaIniciada` | `k`, celdas inestables | Al empezar cada oleada |
 | `Derrumbe` | `k`, `x`, `y` | Una vez por celda inestable |
-| `GranoFuera` | `k`, `x`, `y`, dirección, puntos | Una vez por cada grano que sale |
+| `GranoFuera` | `k`, `x`, `y`, dirección, puntos (x e y son la celda de origen, la que se derrumba) | Una vez por cada grano que sale |
 | `OleadaTerminada` | `k`, derrumbes, granos fuera, puntos ganados | Al terminar cada oleada |
 | `TiradaResuelta` | Oleadas, granos fuera, puntos ganados y puntos totales | Tras la última oleada |
 | `RondaGanada` y `RondaPerdida` | Puntos finales | Al terminar la ronda |
@@ -109,7 +109,7 @@ La interfaz del paquete son estas funciones puras, que nunca modifican su entrad
 - `aplicar(estado, accion)` devuelve `{ estado, eventos }`. Una acción ilegal o una resolución que no termina (`ResolucionNoTermino`) devuelve un error tipado, no lanza excepciones, deja el estado intacto y no emite eventos.
 - `accionesLegales(estado)` lista las acciones permitidas, para los bots y las pruebas.
 - `reproducir(config, semilla, acciones)` devuelve el estado final y todos los eventos de una partida.
-- `serializar(estado)` y `deserializar(texto)` son inversas exactas e incluyen el estado del azar.
+- `serializar(estado)` y `deserializar(texto)` son inversas exactas e incluyen el estado del azar. El texto es JSON canónico (claves ordenadas) con la envoltura {"formato":1,"estado":{…}}. deserializar devuelve un resultado tipado y nunca lanza excepciones; sus errores son JsonInvalido, FormatoDesconocido y EstadoInvalido (con campo y motivo).
 
 Una partida queda definida por su configuración, su semilla y su lista de acciones.
 
@@ -118,7 +118,7 @@ Una partida queda definida por su configuración, su semilla y su lista de accio
 Todo el azar sale de flujos con nombre derivados de una sola semilla de 32 bits, de modo que consumir un flujo no altera a los demás.
 
 - **Flujos:** `siembra` y `mazo` en H1, y `bonus` más adelante. El estado inicial de cada uno sale de combinar la semilla con su nombre mediante una función hash.
-- **Algoritmo:** de 32 bits, con estado serializable y sin dependencias. La tarea T1.2 elige entre sfc32 y xoshiro128** y documenta la decisión.
+- **Algoritmo:** de 32 bits, con estado serializable y sin dependencias. Decidido en T1.2: `xoshiro128**`, con estado de cuatro enteros sin signo; el detalle está en docs/azar.md del repositorio.
 - **Prohibido:** `Math.random`, `Date` y cualquier otra fuente externa, con una regla de linter que lo haga cumplir.
 - **Barajado:** Fisher–Yates con el flujo `mazo`, con índices sin sesgo de módulo.
 - **Siembra:** se recorren las celdas por filas y cada una toma un entero uniforme entre el mínimo y el máximo configurados.
@@ -193,7 +193,7 @@ Sin oleadas. Los dos vecinos que quedarían fuera de la rejilla no reciben nada 
 
 ## Decisiones confirmadas
 
-Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Las dos últimas se añadieron al revisar la v0.1.
+Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2 y T1.3.
 
 - **Una oleada, un derrumbe por celda: aprobado.** Una celda con 8 o más granos necesita varias oleadas, y las cargas grandes alargan la cascada. Alternativa descartada: derrumbes múltiples por oleada, que acortan las cascadas y bajan los puntos.
 - **Explosivo en el borde: aprobado.** Los vecinos fuera de la rejilla no reciben nada ni dan puntos. Alternativa descartada: contarlos como granos que salen, que daría puntos sin cascada.
@@ -204,3 +204,6 @@ Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada e
 - **Meta inicial: aprobada como valor de partida.** En el ejemplo B un solo grano en una rejilla llena de 3×3 da 14 puntos, más que la meta de 10; se recalibra en H2.
 - **Orden de robo y reciclaje del mazo: corregido en v0.2.** La mano jugada pasa a `usados` antes de robar. Si quedan menos granos que `tamanoMano`, se toman los que queden, se reciclan los `usados` y se completa la mano. El caso es alcanzable: con Mano grande y Tirada extra se roban 36 granos de un mazo de 30.
 - **Tope de oleadas: corregido en v0.2.** Es un detector de errores, no un camino de juego: devuelve `ResolucionNoTermino` y deja el estado intacto. La prueba de terminación solo genera cargas alcanzables.
+- **Serialización con envoltura de formato y resultado tipado: añadido en v0.3.** Una futura versión del formato se detecta sin romper nada en silencio, y deserializar sigue la regla de errores tipados en vez de excepciones. Alternativa descartada: lanzar excepciones al deserializar.
+- **Generador `xoshiro128**` y precondiciones con RangeError: añadido en v0.4.** Se eligió `xoshiro128**` por su periodo de 2^128−1 y por sus vectores de referencia publicados, que permiten verificarlo contra una fuente independiente. Una semilla fuera de rango, un rango vacío o un rango de más de 2^32 valores lanzan RangeError, porque son errores de programación y no caminos de juego. Alternativa descartada: sfc32, igualmente válido pero sin esas ventajas de verificación.
+- **GranoFuera lleva la celda de origen: añadido en v0.5.** Sus coordenadas x e y son las de la celda que se derrumba y la dirección indica por dónde sale el grano, que es lo que necesitan la animación y el sonido. Alternativa descartada: usar la celda vecina fuera de la rejilla, con coordenadas como −1, que complicaría cada consumidor del evento.
