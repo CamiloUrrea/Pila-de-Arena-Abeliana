@@ -119,6 +119,33 @@ describe('robarMano', () => {
     expect(robados).toBe(36);
   });
 
+  it('reciclaje del mazo (especificación): tamanoMano 7 toma los 2 restantes antes que los usados barajados', () => {
+    const composicion = { normal: 20, pesado: 6, explosivo: 4 };
+    const inicial = crearMazo(composicion, flujo);
+    let mazo = inicial.mazo;
+    let usados: readonly TipoGrano[] = [];
+    let f = inicial.flujo;
+    for (let i = 0; i < 4; i++) {
+      const r = robarMano(mazo, usados, 7, f);
+      expect(contar([...r.mazo, ...tiposDe(r.mano), ...r.usados])).toEqual(composicion);
+      expect(r.flujo).toBe(f);
+      mazo = r.mazo;
+      usados = [...r.usados, ...tiposDe(r.mano)];
+      f = r.flujo;
+    }
+    expect(mazo).toHaveLength(2);
+    expect(usados).toHaveLength(28);
+
+    const [barajado, trasBarajar] = barajar(usados, f);
+    const quinto = robarMano(mazo, usados, 7, f);
+    expect(tiposDe(quinto.mano)).toEqual([...mazo, ...barajado.slice(0, 5)]);
+    expect(quinto.mazo).toEqual(barajado.slice(5));
+    expect(quinto.usados).toEqual([]);
+    expect(quinto.flujo).toEqual(trasBarajar);
+    expect(quinto.flujo).not.toEqual(f);
+    expect(contar([...quinto.mazo, ...tiposDe(quinto.mano), ...quinto.usados])).toEqual(composicion);
+  });
+
   const arbPartida = fc
     .record({
       normal: fc.integer({ min: 0, max: 10 }),
