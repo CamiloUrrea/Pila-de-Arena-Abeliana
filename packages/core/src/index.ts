@@ -29,13 +29,17 @@ export { deserializar, serializar } from './serializacion.ts';
 export { barajar, derivarFlujo, enteroEnRango, siguienteU32 } from './azar.ts';
 export type {
   AdicionAplicada,
+  ColocacionDeshecha,
   Derrumbe,
   Direccion,
   Evento,
+  GranoColocado,
   GranoFuera,
   ManoRobada,
   OleadaIniciada,
   OleadaTerminada,
+  RondaGanada,
+  RondaPerdida,
   TiradaConfirmada,
   TiradaResuelta,
 } from './eventos.ts';
@@ -48,3 +52,5 @@ export type { ResultadoRobo } from './mazo.ts';
 export { resolverTirada } from './tirada.ts';
 export type { ResolucionTirada } from './tirada.ts';
 export { crearRonda } from './ronda.ts';
+export { accionesLegales, aplicar, reproducir } from './acciones.ts';
+export type { Accion, ErrorAccion, ErrorReproduccion, MotivoIlegal } from './acciones.ts';

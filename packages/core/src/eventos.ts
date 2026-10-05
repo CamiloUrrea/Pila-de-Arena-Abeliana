@@ -6,6 +6,17 @@ export type Direccion = 'arriba' | 'derecha' | 'abajo' | 'izquierda';
 /** Mano robada, en orden de robo. */
 export type ManoRobada = { readonly tipo: 'ManoRobada'; readonly tipos: readonly TipoGrano[] };
 
+/** Colocación provisional de un grano de la mano; la rejilla no cambia hasta Confirmar. */
+export type GranoColocado = {
+  readonly tipo: 'GranoColocado';
+  readonly indiceMano: number;
+  readonly x: number;
+  readonly y: number;
+};
+
+/** Se deshizo la última colocación de la tirada. */
+export type ColocacionDeshecha = { readonly tipo: 'ColocacionDeshecha'; readonly indiceMano: number };
+
 /** Empieza la resolución de la tirada número `numero` (desde 1). */
 export type TiradaConfirmada = { readonly tipo: 'TiradaConfirmada'; readonly numero: number };
 
@@ -54,13 +65,23 @@ export type OleadaTerminada = {
   readonly puntosGanados: number;
 };
 
-/** Eventos del núcleo. Los demás eventos de la especificación llegan en T1.7. */
+/** Fin de la ronda con victoria. `puntos` en centésimas; los sobrantes sobre la meta se conservan. */
+export type RondaGanada = { readonly tipo: 'RondaGanada'; readonly puntos: number };
+
+/** Fin de la ronda con derrota. `puntos` en centésimas. */
+export type RondaPerdida = { readonly tipo: 'RondaPerdida'; readonly puntos: number };
+
+/** Los 12 eventos de la especificación. */
 export type Evento =
   | ManoRobada
+  | GranoColocado
+  | ColocacionDeshecha
   | TiradaConfirmada
   | AdicionAplicada
   | OleadaIniciada
   | Derrumbe
   | GranoFuera
   | OleadaTerminada
-  | TiradaResuelta;
+  | TiradaResuelta
+  | RondaGanada
+  | RondaPerdida;
