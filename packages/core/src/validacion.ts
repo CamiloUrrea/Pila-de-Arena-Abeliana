@@ -1,5 +1,5 @@
 import { dentro } from './rejilla.ts';
-import { FASES, TIPOS_GRANO } from './tipos.ts';
+import { FASES, NOMBRES_FLUJO, TIPOS_GRANO } from './tipos.ts';
 import type { Config, ErrorConfig, ErrorEstado, Estado, Resultado } from './tipos.ts';
 
 function falla<T>(campo: string, motivo: string): Resultado<T, { campo: string; motivo: string }> {
@@ -83,6 +83,21 @@ export function validarEstado(estado: Estado): Resultado<Estado, ErrorEstado> {
   }
   const desconocido = todos.find((t) => !TIPOS_GRANO.includes(t));
   if (desconocido !== undefined) return falla('mazo', `tipo de grano desconocido: ${String(desconocido)}`);
+
+  const claves = Object.keys(estado.rng);
+  const extra = claves.find((clave) => !NOMBRES_FLUJO.some((nombre) => nombre === clave));
+  if (extra !== undefined) return falla(`rng.${extra}`, 'flujo desconocido');
+  for (const nombre of NOMBRES_FLUJO) {
+    if (!claves.includes(nombre)) return falla(`rng.${nombre}`, 'falta el flujo');
+    const flujo: readonly number[] = estado.rng[nombre];
+    if (flujo.length !== 4) return falla(`rng.${nombre}`, 'debe tener 4 palabras');
+    for (const [i, palabra] of flujo.entries()) {
+      if (!Number.isInteger(palabra) || palabra < 0 || palabra > 0xffffffff) {
+        return falla(`rng.${nombre}[${i}]`, 'debe ser un entero de 0 a 2^32−1');
+      }
+    }
+    if (flujo.every((palabra) => palabra === 0)) return falla(`rng.${nombre}`, 'no puede ser todo ceros');
+  }
 
   return { ok: true, valor: estado };
 }

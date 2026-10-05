@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { CONFIG_INICIAL, FASES, TIPOS_GRANO, crearRejilla } from '../src/index.ts';
-import type { Config, Estado, TipoGrano } from '../src/index.ts';
+import type { Config, Estado, EstadoFlujo, TipoGrano } from '../src/index.ts';
 
 /** Lista de tipos con la composición de `mazo`, en el orden de `TIPOS_GRANO`. */
 export function composicion(mazo: Config['mazo']): TipoGrano[] {
@@ -58,7 +58,12 @@ export const arbConfig: fc.Arbitrary<Config> = fc
     topeOleadas: r.topeOleadas,
   }));
 
-const cuaterna = fc.array(fc.integer({ min: 0, max: 0xffffffff }), { minLength: 4, maxLength: 4 });
+const palabra = fc.integer({ min: 0, max: 0xffffffff });
+
+/** Estados de flujo válidos: cuatro palabras de 32 bits sin signo, no todas cero. */
+export const arbFlujo: fc.Arbitrary<EstadoFlujo> = fc
+  .tuple(palabra, palabra, palabra, palabra)
+  .filter((flujo) => flujo.some((p) => p !== 0));
 
 /** Estados válidos: celdas 0..7 y la composición del mazo repartida entre mazo, mano y usados. */
 export const arbEstado: fc.Arbitrary<Estado> = arbConfig.chain((config) => {
@@ -81,7 +86,7 @@ export const arbEstado: fc.Arbitrary<Estado> = arbConfig.chain((config) => {
       fase: fc.constantFrom(...FASES),
       tiradasRestantes: fc.integer({ min: 0, max: config.tiradas }),
       puntos: fc.integer({ min: 0, max: 1_000_000 }),
-      rng: fc.record({ siembra: cuaterna, mazo: cuaterna, bonus: cuaterna }, { requiredKeys: ['siembra', 'mazo'] }),
+      rng: fc.record({ siembra: arbFlujo, mazo: arbFlujo }),
     })
     .map((r): Estado => {
       const finUsados = r.nMano + Math.min(r.nUsados, tipos.length - r.nMano);
@@ -112,7 +117,7 @@ export function congelar<T>(valor: T): T {
 export function invertirClaves(e: Estado): Estado {
   const c = e.config;
   return {
-    rng: Object.fromEntries(Object.entries(e.rng).reverse()),
+    rng: { mazo: e.rng.mazo, siembra: e.rng.siembra },
     puntos: e.puntos,
     tiradasRestantes: e.tiradasRestantes,
     usados: e.usados,

@@ -1,5 +1,5 @@
 import { FASES, TIPOS_GRANO } from './tipos.ts';
-import type { ErrorDeserializacion, Estado, Resultado } from './tipos.ts';
+import type { ErrorDeserializacion, Estado, EstadoFlujo, Resultado } from './tipos.ts';
 import { validarEstado } from './validacion.ts';
 
 const FORMATO = 1;
@@ -48,7 +48,7 @@ export function serializar(estado: Estado): string {
       usados: estado.usados,
       tiradasRestantes: estado.tiradasRestantes,
       puntos: estado.puntos,
-      rng: estado.rng,
+      rng: { siembra: estado.rng.siembra, mazo: estado.rng.mazo },
     },
   });
 }
@@ -90,19 +90,16 @@ function arreglo<T>(lector: Lector<T>): Lector<T[]> {
   };
 }
 
-function diccionario<T>(lector: Lector<T>): Lector<Record<string, T>> {
-  return (valor, ruta) => {
-    if (!esRegistro(valor)) return fallo(ruta, 'debe ser un objeto');
-    const entradas: [string, T][] = [];
-    for (const [clave, elemento] of Object.entries(valor)) {
-      const leido = lector(elemento, unir(ruta, clave));
-      if (!leido.ok) return leido;
-      entradas.push([clave, leido.valor]);
-    }
-    // Object.fromEntries crea propiedades propias, también para claves como «__proto__».
-    return { ok: true, valor: Object.fromEntries(entradas) };
-  };
-}
+/** Cuatro números; que sean palabras de 32 bits no todas cero lo comprueba `validarEstado`. */
+const flujo: Lector<EstadoFlujo> = (valor, ruta) => {
+  const leido = arreglo(numero)(valor, ruta);
+  if (!leido.ok) return leido;
+  const [a, b, c, d] = leido.valor;
+  if (leido.valor.length !== 4 || a === undefined || b === undefined || c === undefined || d === undefined) {
+    return fallo(ruta, 'debe tener 4 palabras');
+  }
+  return { ok: true, valor: [a, b, c, d] };
+};
 
 type Leidos<L> = { [K in keyof L]: L[K] extends Lector<infer T> ? T : never };
 
@@ -144,7 +141,7 @@ const leerEstado = registro({
   usados: arreglo(literal(TIPOS_GRANO)),
   tiradasRestantes: numero,
   puntos: numero,
-  rng: diccionario(arreglo(numero)),
+  rng: registro({ siembra: flujo, mazo: flujo }),
 });
 
 /** Inversa exacta de `serializar`. Nunca lanza: los fallos vuelven como errores tipados. */

@@ -20,6 +20,17 @@ export type Config = {
   readonly topeOleadas: number;
 };
 
+/** Estado de un flujo xoshiro128**: cuatro enteros sin signo de 32 bits, nunca todos cero. */
+export type EstadoFlujo = readonly [number, number, number, number];
+
+/** Flujos de azar con nombre. `bonus` se añade en H5. */
+export type NombreFlujo = 'siembra' | 'mazo';
+
+export const NOMBRES_FLUJO: readonly NombreFlujo[] = ['siembra', 'mazo'];
+
+/** Estado de todos los flujos de azar de una ronda. */
+export type EstadoRng = { readonly [N in NombreFlujo]: EstadoFlujo };
+
 export type Coordenada = { readonly x: number; readonly y: number };
 
 /** Grano de la mano; `celda` es su colocación provisional en esta tirada, o `null`. */
@@ -43,8 +54,8 @@ export type Estado = {
   readonly tiradasRestantes: number;
   /** Puntos acumulados en la ronda, en centésimas. */
   readonly puntos: number;
-  /** Estado de cada flujo de azar con nombre. T1.2 afinará este tipo al elegir el algoritmo. */
-  readonly rng: Readonly<Record<string, readonly number[]>>;
+  /** Estado de cada flujo de azar con nombre. */
+  readonly rng: EstadoRng;
 };
 
 export type Resultado<T, E> = { readonly ok: true; readonly valor: T } | { readonly ok: false; readonly error: E };

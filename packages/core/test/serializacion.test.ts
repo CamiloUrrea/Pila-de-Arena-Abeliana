@@ -87,6 +87,14 @@ describe('deserializar rechaza', () => {
     ['tipo de grano desconocido', texto.replace('"usados":[]', '"usados":["arcilla"]'), { tipo: 'EstadoInvalido', campo: 'usados[0]' }],
     ['fase desconocida', texto.replace('"fase":"colocando"', '"fase":"pausada"'), { tipo: 'EstadoInvalido', campo: 'fase' }],
     ['rng con valores no numéricos', texto.replace('"mazo":[5,6,7,8]', '"mazo":[5,6,7,"8"]'), { tipo: 'EstadoInvalido', campo: 'rng.mazo[3]' }],
+    [
+      'un flujo de más en rng',
+      texto.replace('"rng":{', '"rng":{"bonus":[1,2,3,4],'),
+      { tipo: 'EstadoInvalido', campo: 'rng.bonus' },
+    ],
+    ['un flujo de 3 palabras', texto.replace('[5,6,7,8]', '[5,6,7]'), { tipo: 'EstadoInvalido', campo: 'rng.mazo' }],
+    ['un flujo todo ceros', texto.replace('[5,6,7,8]', '[0,0,0,0]'), { tipo: 'EstadoInvalido', campo: 'rng.mazo' }],
+    ['una palabra de 2^32', texto.replace('[5,6,7,8]', '[4294967296,6,7,8]'), { tipo: 'EstadoInvalido', campo: 'rng.mazo[0]' }],
     ['puntos negativos (forma bien, estado inválido)', texto.replace('"puntos":0', '"puntos":-1'), { tipo: 'EstadoInvalido', campo: 'puntos' }],
     ['composición alterada', texto.replace('"usados":[]', '"usados":["normal"]'), { tipo: 'EstadoInvalido', campo: 'mazo' }],
   ])('%s', (_, entrada, esperado) => {

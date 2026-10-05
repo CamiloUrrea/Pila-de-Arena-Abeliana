@@ -41,6 +41,13 @@ describe('validarEstado', () => {
     ['un grano de menos en el mazo', estadoDePrueba({ mazo: base.mazo.slice(1) }), 'mazo'],
     ['un tipo cambiado por otro', estadoDePrueba({ mazo: ['pesado', ...base.mazo.slice(1)] }), 'mazo'],
     ['un tipo desconocido', conCampo(base, 'usados', ['arcilla']), 'mazo'],
+    ['un flujo todo ceros', estadoDePrueba({ rng: { siembra: [1, 2, 3, 4], mazo: [0, 0, 0, 0] } }), 'rng.mazo'],
+    ['una palabra de 2^32', estadoDePrueba({ rng: { siembra: [2 ** 32, 2, 3, 4], mazo: [5, 6, 7, 8] } }), 'rng.siembra[0]'],
+    ['una palabra negativa', estadoDePrueba({ rng: { siembra: [1, 2, -3, 4], mazo: [5, 6, 7, 8] } }), 'rng.siembra[2]'],
+    ['una palabra no entera', estadoDePrueba({ rng: { siembra: [1, 2, 3, 4], mazo: [5, 6, 7, 8.5] } }), 'rng.mazo[3]'],
+    ['un flujo de 3 palabras', conCampo(base, 'rng', { siembra: [1, 2, 3, 4], mazo: [5, 6, 7] }), 'rng.mazo'],
+    ['un flujo de más', conCampo(base, 'rng', { ...base.rng, bonus: [1, 2, 3, 4] }), 'rng.bonus'],
+    ['un flujo de menos', conCampo(base, 'rng', { siembra: [1, 2, 3, 4] }), 'rng.mazo'],
   ])('rechaza %s', (_, estado, campo) => {
     const resultado = validarEstado(estado);
     expect(resultado.ok).toBe(false);
