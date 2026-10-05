@@ -1,4 +1,4 @@
-# Especificación del núcleo (v0.7)
+# Especificación del núcleo (v0.8)
 
 > Copia versionada para el repositorio. La fuente de verdad es el documento «MVP - Juego de la Pila de Arena Abeliana», pestaña «Especificación del núcleo». Si la especificación cambia, se vuelve a exportar y se sube de versión.
 
@@ -53,7 +53,7 @@ Las celdas se indexan con x = columna e y = fila, con el origen arriba a la izqu
 | `Deshacer` | Quita la última colocación provisional de la tirada (la más reciente en el tiempo, según ordenColocacion) | Hay al menos una colocación |
 | `Confirmar` | Resuelve la tirada | Fase `colocando` y todos los granos de la mano colocados |
 
-Varios granos pueden ir a la misma celda.
+Varios granos pueden ir a la misma celda. Una acción ilegal devuelve su motivo: FaseIncorrecta, IndiceManoInvalido, GranoYaColocado, CeldaFueraDeRejilla, NadaQueDeshacer o ManoIncompleta, comprobados en ese orden.
 
 ## Resolución de una tirada
 
@@ -107,7 +107,7 @@ La interfaz y el sonido solo consumen estos eventos; ninguno de ellos decide nad
 La interfaz del paquete son estas funciones puras, que nunca modifican su entrada:
 
 - `crearRonda(config, semilla)` devuelve el estado inicial: siembra la rejilla, baraja el mazo, roba la primera mano y emite `ManoRobada`.
-- `aplicar(estado, accion)` devuelve `{ estado, eventos }`. Una acción ilegal o una resolución que no termina (`ResolucionNoTermino`) devuelve un error tipado, no lanza excepciones, deja el estado intacto y no emite eventos.
+- `aplicar(estado, accion)` devuelve `{ estado, eventos }`. Una acción ilegal o una resolución que no termina (`ResolucionNoTermino`) devuelve un error tipado, no lanza excepciones, deja el estado intacto y no emite eventos. Presupone un estado válido, como los que producen crearRonda, aplicar y deserializar; con un estado inválido construido a mano su comportamiento no está definido.
 - `accionesLegales(estado)` lista las acciones permitidas, para los bots y las pruebas.
 - `reproducir(config, semilla, acciones)` devuelve el estado final y todos los eventos de una partida.
 - `serializar(estado)` y `deserializar(texto)` son inversas exactas e incluyen el estado del azar. El texto es JSON canónico (claves ordenadas) con la envoltura {"formato":1,"estado":{…}}. deserializar devuelve un resultado tipado y nunca lanza excepciones; sus errores son JsonInvalido, FormatoDesconocido y EstadoInvalido (con campo y motivo).
@@ -194,7 +194,7 @@ Sin oleadas. Los dos vecinos que quedarían fuera de la rejilla no reciben nada 
 
 ## Decisiones confirmadas
 
-Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5, y otra al preparar T1.7.
+Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5, otra al preparar T1.7 y otra al cerrar T1.7b.
 
 - **Una oleada, un derrumbe por celda: aprobado.** Una celda con 8 o más granos necesita varias oleadas, y las cargas grandes alargan la cascada. Alternativa descartada: derrumbes múltiples por oleada, que acortan las cascadas y bajan los puntos.
 - **Explosivo en el borde: aprobado.** Los vecinos fuera de la rejilla no reciben nada ni dan puntos. Alternativa descartada: contarlos como granos que salen, que daría puntos sin cascada.
@@ -210,3 +210,4 @@ Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada e
 - **GranoFuera lleva la celda de origen: añadido en v0.5.** Sus coordenadas x e y son las de la celda que se derrumba y la dirección indica por dónde sale el grano, que es lo que necesitan la animación y el sonido. Alternativa descartada: usar la celda vecina fuera de la rejilla, con coordenadas como −1, que complicaría cada consumidor del evento.
 - **Granos como tabla de desplazamientos: añadido en v0.6.** Cada tipo declara sus adiciones como una lista de (dx, dy, cantidad) y lo que cae fuera de la rejilla se ignora, así que añadir un tipo de grano es añadir una fila de datos. Alternativa descartada: una rama de código por tipo, que va contra la regla de granos y bonus como datos. Además, la prueba de reciclaje con tamanoMano 6 no ejercita los granos restantes (cinco manos de 6 vacían justo el mazo de 30), por eso se añadió el caso con tamanoMano 7.
 - **Orden de colocación, coherencia de fase y siembra estable: añadido en v0.7.** El estado guarda ordenColocacion porque sin él Deshacer no sabría cuál fue la última colocación. Las fases se validan contra los puntos y las tiradas, y el máximo de siembra debe ser menor que el umbral para que ninguna ronda empiece con la rejilla inestable. No se exige que la mano tenga exactamente tamanoMano granos, porque el bonus Eco traerá un grano extra. Alternativa descartada: definir Deshacer por el mayor índice de mano, que no coincide con lo que el jugador hizo en último lugar.
+- **Contrato de aplicar con estados válidos y motivos de acción ilegal: añadido en v0.8.** aplicar presupone un estado que venga de crearRonda, aplicar o deserializar, que ya validan; las acciones ilegales devuelven uno de seis motivos con un orden de comprobación fijo. Alternativa descartada: validar el estado completo en cada acción, que es caro en el simulador y redundante, porque ningún camino público produce estados inválidos.
