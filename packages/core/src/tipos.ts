@@ -33,6 +33,15 @@ export type EstadoRng = { readonly [N in NombreFlujo]: EstadoFlujo };
 
 export type Coordenada = { readonly x: number; readonly y: number };
 
+/** Grano de un tipo colocado en una celda. */
+export type Colocacion = { readonly tipo: TipoGrano; readonly x: number; readonly y: number };
+
+/** Granos que suma un tipo al colocarse: en la celda `(x + dx, y + dy)`, si cae dentro de la rejilla. */
+export type AdicionGrano = { readonly dx: number; readonly dy: number; readonly cantidad: number };
+
+/** Definición de un tipo de grano como datos, sin lógica. */
+export type DefinicionGrano = { readonly tipo: TipoGrano; readonly adiciones: readonly AdicionGrano[] };
+
 /** Grano de la mano; `celda` es su colocación provisional en esta tirada, o `null`. */
 export type GranoMano = {
   readonly tipo: TipoGrano;

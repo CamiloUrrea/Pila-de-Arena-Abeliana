@@ -92,7 +92,7 @@ describe('resolverOleadas', () => {
         { x: 2, y: 2 },
       ],
     ]);
-    const oleada2 = r.eventos.filter((e) => e.k === 2 && (e.tipo === 'Derrumbe' || e.tipo === 'GranoFuera'));
+    const oleada2 = r.eventos.filter((e) => (e.tipo === 'Derrumbe' || e.tipo === 'GranoFuera') && e.k === 2);
     expect(oleada2).toEqual([
       { tipo: 'Derrumbe', k: 2, x: 1, y: 0 },
       { tipo: 'GranoFuera', k: 2, x: 1, y: 0, direccion: 'arriba', puntos: 110 },

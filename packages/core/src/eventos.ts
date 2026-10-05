@@ -1,7 +1,18 @@
-import type { Coordenada } from './tipos.ts';
+import type { Coordenada, TipoGrano } from './tipos.ts';
 
 /** Direcciones de reparto, en el orden de la especificación. */
 export type Direccion = 'arriba' | 'derecha' | 'abajo' | 'izquierda';
+
+/** Mano robada, en orden de robo. */
+export type ManoRobada = { readonly tipo: 'ManoRobada'; readonly tipos: readonly TipoGrano[] };
+
+/** Granos que recibió la celda `(x, y)` en el paso 1, sumando todas las colocaciones. */
+export type AdicionAplicada = {
+  readonly tipo: 'AdicionAplicada';
+  readonly x: number;
+  readonly y: number;
+  readonly cantidad: number;
+};
 
 export type OleadaIniciada = {
   readonly tipo: 'OleadaIniciada';
@@ -31,5 +42,5 @@ export type OleadaTerminada = {
   readonly puntosGanados: number;
 };
 
-/** Eventos del núcleo. Los demás eventos de la especificación llegan en T1.5 a T1.7. */
-export type Evento = OleadaIniciada | Derrumbe | GranoFuera | OleadaTerminada;
+/** Eventos del núcleo. Los demás eventos de la especificación llegan en T1.6 y T1.7. */
+export type Evento = ManoRobada | AdicionAplicada | OleadaIniciada | Derrumbe | GranoFuera | OleadaTerminada;

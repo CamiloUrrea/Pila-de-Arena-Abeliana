@@ -87,7 +87,7 @@ export type Colocacion = { readonly tipo: TipoGrano; readonly x: number; readonl
 
 /**
  * Paso 1 de la resolución: normal suma 1, pesado 2 y explosivo 1 más 1 a cada vecino dentro.
- * Provisional: T1.5 implementará el de src y lo cruzará con este.
+ * Oráculo independiente de `aplicarAdiciones` (src/adiciones.ts), que se cruza con él en las pruebas.
  */
 export function sumarAdiciones(celdas: Celdas, lado: number, colocaciones: readonly Colocacion[]): number[][] {
   const rejilla = new Plana(lado, celdas);
