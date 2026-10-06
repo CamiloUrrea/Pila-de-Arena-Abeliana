@@ -144,3 +144,9 @@ export function celdaEn(punto: Punto, disposicion: Disposicion): Punto | null {
 export function botonDeshacerEn(punto: Punto, mano: DisposicionMano): boolean {
   return contiene(mano.deshacer, punto);
 }
+
+/** Índice de la ficha bajo `punto` (dentro de su círculo), o `null` fuera de toda ficha y en los huecos. */
+export function fichaEn(punto: Punto, mano: DisposicionMano): number | null {
+  const indice = mano.fichas.findIndex((f) => f.radio > 0 && Math.hypot(punto.x - f.x, punto.y - f.y) <= f.radio);
+  return indice === -1 ? null : indice;
+}

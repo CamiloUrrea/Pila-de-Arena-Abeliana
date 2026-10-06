@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { DEFINICIONES_GRANOS } from '@pila/core';
-import { TEXTOS, describirDefinicion, describirGrano } from '../src/textos.ts';
+import type { MotivoIlegal } from '@pila/core';
+import type { ErrorControlador } from '../src/controlador.ts';
+import { TEXTOS, describirDefinicion, describirError, describirGrano } from '../src/textos.ts';
 
 describe('describirGrano', () => {
   it('describe los tres tipos del MVP a partir de DEFINICIONES_GRANOS', () => {
@@ -77,5 +79,48 @@ describe('describirGrano', () => {
     expect(TEXTOS.deshacer).toBe('Deshacer');
     expect(TEXTOS.manoCompleta).toBe('Mano completa');
     expect(TEXTOS.informacion(42, 3)).toBe('semilla 42 · lado 3');
+  });
+});
+
+/** Clave de cada error posible: su tipo o, para `AccionIlegal`, su motivo. */
+type ClaveError = Exclude<ErrorControlador['tipo'], 'AccionIlegal'> | MotivoIlegal;
+
+const ilegal = (motivo: MotivoIlegal): ErrorControlador => ({ tipo: 'AccionIlegal', motivo });
+
+/**
+ * Un ejemplo de cada error conocido. El tipo `Record<ClaveError, …>` obliga a añadir aquí cualquier error nuevo
+ * del controlador o del núcleo: si falta uno, esta prueba deja de compilar.
+ */
+const ERRORES: Readonly<Record<ClaveError, ErrorControlador>> = {
+  SinGranoSeleccionado: { tipo: 'SinGranoSeleccionado' },
+  GranoNoSeleccionable: { tipo: 'GranoNoSeleccionable', indice: 3 },
+  NoEsLaUltimaColocacion: { tipo: 'NoEsLaUltimaColocacion', indice: 1 },
+  GranoNoColocado: { tipo: 'GranoNoColocado', indice: 2 },
+  ResolucionNoTermino: { tipo: 'ResolucionNoTermino', topeOleadas: 1000 },
+  FaseIncorrecta: ilegal('FaseIncorrecta'),
+  IndiceManoInvalido: ilegal('IndiceManoInvalido'),
+  GranoYaColocado: ilegal('GranoYaColocado'),
+  CeldaFueraDeRejilla: ilegal('CeldaFueraDeRejilla'),
+  NadaQueDeshacer: ilegal('NadaQueDeshacer'),
+  ManoIncompleta: ilegal('ManoIncompleta'),
+};
+
+describe('describirError', () => {
+  it.each(Object.entries(ERRORES))('%s tiene un mensaje en español', (_, error) => {
+    const mensaje = describirError(error);
+    expect(mensaje.length).toBeGreaterThan(10);
+    // Frase en español: empieza en mayúscula, termina en punto y no es el respaldo de error desconocido.
+    expect(mensaje).toMatch(/^[A-ZÁÉÍÓÚÑ]/);
+    expect(mensaje.endsWith('.')).toBe(true);
+    expect(mensaje).not.toContain('desconocido');
+  });
+
+  it('cada error tiene un mensaje distinto', () => {
+    const mensajes = Object.values(ERRORES).map(describirError);
+    expect(new Set(mensajes).size).toBe(mensajes.length);
+  });
+
+  it('NoEsLaUltimaColocacion explica cómo deshacer', () => {
+    expect(describirError(ERRORES.NoEsLaUltimaColocacion)).toBe('Solo se puede deshacer la última colocación: usa Deshacer.');
   });
 });

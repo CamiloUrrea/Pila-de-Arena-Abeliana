@@ -2,14 +2,15 @@
 // clics, toques y teclas a llamadas al controlador puro. No decide nada del juego.
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import type { FederatedPointerEvent } from 'pixi.js';
-import type { Estado } from '@pila/core';
-import { colocar, deshacer, iniciarControlador } from './controlador.ts';
-import type { EstadoInterfaz, PasoInterfaz } from './controlador.ts';
-import { botonDeshacerEn, celdaEn, disponer, disponerMano } from './disposicion.ts';
+import type { Estado, Resultado } from '@pila/core';
+import { ciclar, colocar, deshacer, deshacerDesdeFicha, iniciarControlador, seleccionar } from './controlador.ts';
+import type { ErrorControlador, EstadoInterfaz, PasoInterfaz } from './controlador.ts';
+import { botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from './disposicion.ts';
 import type { Disposicion, DisposicionMano, Punto, Rect } from './disposicion.ts';
-import { calcularPrevistas } from './previsualizacion.ts';
+import { accionDeTecla } from './entrada.ts';
+import { calcularPrevistasConCandidata } from './previsualizacion.ts';
 import { TEMA } from './tema.ts';
-import { TEXTOS, describirGrano } from './textos.ts';
+import { TEXTOS, describirError, describirGrano } from './textos.ts';
 import { PATRONES_GRANOS, describirCeldas } from './vista.ts';
 import type { CeldaDescrita } from './vista.ts';
 
@@ -17,9 +18,6 @@ export type Escena = {
   /** Muestra un estado nuevo y selecciona su primer grano sin colocar. */
   readonly mostrarEstado: (estado: Estado) => void;
 };
-
-/** Teclas que deshacen la última colocación. */
-const TECLAS_DESHACER: ReadonlySet<string> = new Set(['z', 'Z', 'Backspace']);
 
 /**
  * Crea la aplicación de PixiJS dentro de `contenedor`, ajustada a la ventana y a la densidad de píxeles, y atiende
@@ -44,6 +42,10 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number): Pro
   let ui: EstadoInterfaz | undefined;
   let tablero: Disposicion | undefined;
   let mano: DisposicionMano | undefined;
+  /** Celda bajo el ratón, para la vista previa de la candidata; `null` fuera del tablero y con puntero táctil. */
+  let celdaRaton: Punto | null = null;
+  /** Mensaje de la última acción imposible; se borra con la siguiente acción. */
+  let mensaje: string | null = null;
 
   const dibujar = (): void => {
     for (const hijo of capa.removeChildren()) hijo.destroy({ children: true });
@@ -53,44 +55,75 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number): Pro
     tablero = disponer(ventana.ancho, ventana.alto, estado.config.lado);
     mano = disponerMano(ventana, estado.mano.length);
     capa.addChild(dibujarInformacion(tablero.bandaSuperior, semilla, estado.config.lado));
-    capa.addChild(dibujarTablero(tablero, estado));
-    capa.addChild(dibujarMano(mano, ui));
+    capa.addChild(dibujarTablero(tablero, ui, celdaRaton));
+    capa.addChild(dibujarMano(mano, ui, mensaje));
   };
 
-  /** Aplica un paso del controlador: si es un error no hace nada visible; si no, redibuja. */
-  const aplicarPaso = (paso: { readonly ok: true; readonly valor: PasoInterfaz } | { readonly ok: false }): void => {
-    if (!paso.ok) return;
-    ui = paso.valor.ui;
+  /** Aplica un paso del controlador: un error se muestra como mensaje; si no, cambia el estado. Siempre redibuja. */
+  const ejecutar = (paso: Resultado<PasoInterfaz, ErrorControlador>): void => {
+    if (paso.ok) {
+      ui = paso.valor.ui;
+      mensaje = null;
+    } else {
+      mensaje = describirError(paso.error);
+    }
     dibujar();
   };
 
-  const objetivo = (p: Punto): 'celda' | 'deshacer' | null => {
-    if (ui === undefined) return null;
-    if (tablero !== undefined && ui.seleccionado !== null && celdaEn(p, tablero) !== null) return 'celda';
-    if (mano !== undefined && ui.estado.ordenColocacion.length > 0 && botonDeshacerEn(p, mano)) return 'deshacer';
-    return null;
+  /** Si el punto cae sobre algo que responde a un clic, para el cursor de mano. */
+  const accionable = (p: Punto): boolean => {
+    if (ui === undefined) return false;
+    const { estado, seleccionado } = ui;
+    if (tablero !== undefined && seleccionado !== null && celdaEn(p, tablero) !== null) return true;
+    if (mano === undefined) return false;
+    const ficha = fichaEn(p, mano);
+    if (ficha !== null) return estado.mano[ficha]?.celda === null || estado.ordenColocacion.at(-1) === ficha;
+    return estado.ordenColocacion.length > 0 && botonDeshacerEn(p, mano);
   };
 
   app.stage.on('pointertap', (e: FederatedPointerEvent) => {
     if (ui === undefined) return;
     const p = { x: e.global.x, y: e.global.y };
     const celda = tablero === undefined ? null : celdaEn(p, tablero);
-    if (celda !== null) aplicarPaso(colocar(ui, celda.x, celda.y));
-    else if (mano !== undefined && botonDeshacerEn(p, mano)) aplicarPaso(deshacer(ui));
+    const ficha = mano === undefined ? null : fichaEn(p, mano);
+    if (celda !== null) {
+      ejecutar(colocar(ui, celda.x, celda.y));
+    } else if (ficha !== null) {
+      // Una ficha sin colocar se elige; una colocada se deshace si es la última (si no, el error explica por qué).
+      ejecutar(ui.estado.mano[ficha]?.celda === null ? seleccionar(ui, ficha) : deshacerDesdeFicha(ui, ficha));
+    } else if (mano !== undefined && botonDeshacerEn(p, mano)) {
+      ejecutar(deshacer(ui));
+    }
   });
+
+  const moverRaton = (celda: Punto | null): void => {
+    if (celda?.x === celdaRaton?.x && celda?.y === celdaRaton?.y) return;
+    celdaRaton = celda;
+    dibujar();
+  };
   app.stage.on('pointermove', (e: FederatedPointerEvent) => {
-    app.canvas.style.cursor = objetivo({ x: e.global.x, y: e.global.y }) === null ? 'default' : 'pointer';
+    const p = { x: e.global.x, y: e.global.y };
+    app.canvas.style.cursor = accionable(p) ? 'pointer' : 'default';
+    // Solo el ratón tiene vista previa al pasar: con un dedo no hay «pasar por encima».
+    moverRaton(e.pointerType === 'mouse' && tablero !== undefined ? celdaEn(p, tablero) : null);
   });
+  app.canvas.addEventListener('pointerleave', () => moverRaton(null));
+
   window.addEventListener('keydown', (e) => {
-    if (ui === undefined || !TECLAS_DESHACER.has(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (ui === undefined) return;
+    const accion = accionDeTecla({ tecla: e.key, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey });
+    if (accion === null) return;
     e.preventDefault();
-    aplicarPaso(deshacer(ui));
+    if (accion.tipo === 'seleccionar') ejecutar(seleccionar(ui, accion.indice));
+    else if (accion.tipo === 'ciclar') ejecutar(ciclar(ui, accion.direccion));
+    else ejecutar(deshacer(ui));
   });
 
   app.renderer.on('resize', dibujar);
   return {
     mostrarEstado: (estado) => {
       ui = iniciarControlador(estado);
+      mensaje = null;
       dibujar();
     },
   };
@@ -112,11 +145,12 @@ function dibujarInformacion(banda: Rect, semilla: number, lado: number): Text {
   return informacion;
 }
 
-function dibujarTablero(d: Disposicion, estado: Estado): Container {
+function dibujarTablero(d: Disposicion, ui: EstadoInterfaz, celdaRaton: Punto | null): Container {
   const contenedor = new Container();
   if (d.celda <= 0) return contenedor;
-  const { previstas } = calcularPrevistas(estado);
-  for (const c of describirCeldas(estado.celdas, estado.config.umbral, previstas)) {
+  const { estado } = ui;
+  const { previstas, candidata } = calcularPrevistasConCandidata(estado, ui.seleccionado, celdaRaton);
+  for (const c of describirCeldas(estado.celdas, estado.config.umbral, previstas, candidata)) {
     const r = d.celdas[c.y]?.[c.x];
     if (r !== undefined) contenedor.addChild(dibujarCelda(r, c));
   }
@@ -147,9 +181,10 @@ function dibujarCelda(r: Rect, c: CeldaDescrita): Container {
     const x = cx + p.x * r.ancho;
     const y = cy + p.y * r.alto;
     if (p.fantasma) {
-      // Solo el contorno, trazado hacia dentro para que el punto no crezca.
-      const w = radio * granos.grosorFantasma;
-      g.circle(x, y, radio - w / 2).stroke({ width: w, color: c.colorTinta });
+      // Solo el contorno, trazado hacia dentro para que el punto no crezca; el de la candidata, más fino y tenue.
+      const w = radio * (p.candidata ? granos.candidata.grosor : granos.grosorFantasma);
+      const alpha = p.candidata ? granos.candidata.alfa : 1;
+      g.circle(x, y, radio - w / 2).stroke({ width: w, color: c.colorTinta, alpha });
     } else {
       g.circle(x, y, radio).fill(colores.grano);
     }
@@ -173,7 +208,7 @@ function dibujarCelda(r: Rect, c: CeldaDescrita): Container {
   return contenedor;
 }
 
-function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz): Container {
+function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz, mensaje: string | null): Container {
   const { fichas: aspecto, colores, granos, tipografia, mano: proporciones, boton } = TEMA;
   const contenedor = new Container();
 
@@ -222,8 +257,9 @@ function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz): Container {
     contenedor.addChild(texto);
   }
 
+  // La línea de información: el error de la última acción imposible o, si no, el efecto del grano seleccionado.
   const seleccionado = ui.seleccionado === null ? undefined : ui.estado.mano[ui.seleccionado];
-  const linea = seleccionado === undefined ? TEXTOS.manoCompleta : describirGrano(seleccionado.tipo);
+  const linea = mensaje ?? (seleccionado === undefined ? TEXTOS.manoCompleta : describirGrano(seleccionado.tipo));
   const rd = d.descripcion;
   if (rd.ancho > 0 && rd.alto > 0) {
     // El tamaño se limita también por el ancho, para que la línea quepa en ventanas estrechas.
@@ -232,7 +268,7 @@ function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz): Container {
       style: {
         fontFamily: tipografia.familia,
         fontSize: Math.max(1, Math.min(rd.alto * proporciones.textoDescripcion, (rd.ancho / Math.max(1, linea.length)) * 1.8)),
-        fill: colores.texto,
+        fill: mensaje === null ? colores.texto : colores.error,
       },
     });
     descripcion.anchor.set(0.5);

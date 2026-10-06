@@ -15,7 +15,7 @@ function mostrarError(titulo: string, lineas: readonly string[]): void {
   const caja = document.createElement('div');
   caja.setAttribute('role', 'alert');
   Object.assign(caja.style, {
-    color: TEMA.colores.error,
+    color: `#${TEMA.colores.error.toString(16).padStart(6, '0')}`,
     fontFamily: TEMA.tipografia.familia,
     fontSize: '18px',
     lineHeight: '1.5',

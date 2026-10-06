@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { botonDeshacerEn, celdaEn, disponer, disponerMano } from '../src/disposicion.ts';
+import { botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from '../src/disposicion.ts';
 import type { Disposicion, Rect } from '../src/disposicion.ts';
 import { BANDAS_INICIALES, TEMA } from '../src/tema.ts';
 
@@ -240,5 +240,50 @@ describe('selección por punto', () => {
     const ficha = d.fichas[0];
     if (ficha === undefined) throw new Error('sin ficha');
     expect(botonDeshacerEn(ficha, d)).toBe(false);
+  });
+});
+
+describe('fichaEn', () => {
+  it('acierta en el centro de cada ficha, para 1 a 12 fichas y varias ventanas', () => {
+    for (const [ancho, alto] of VENTANAS) {
+      for (let n = 1; n <= 12; n++) {
+        const d = disponerMano({ ancho, alto }, n);
+        for (const [i, f] of d.fichas.entries()) expect(fichaEn({ x: f.x, y: f.y }, d)).toBe(i);
+      }
+    }
+  });
+
+  it('acierta cerca del borde de la ficha y falla justo fuera', () => {
+    const d = disponerMano({ ancho: 1000, alto: 800 }, 5);
+    const f = d.fichas[2];
+    if (f === undefined) throw new Error('sin ficha');
+    expect(fichaEn({ x: f.x + f.radio * 0.99, y: f.y }, d)).toBe(2);
+    expect(fichaEn({ x: f.x, y: f.y - f.radio * 0.99 }, d)).toBe(2);
+    expect(fichaEn({ x: f.x, y: f.y + f.radio * 1.01 }, d)).toBeNull();
+    // La esquina del cuadrado que envuelve la ficha ya está fuera del círculo.
+    expect(fichaEn({ x: f.x + f.radio * 0.9, y: f.y + f.radio * 0.9 }, d)).toBeNull();
+  });
+
+  it('devuelve null en los huecos entre fichas, fuera de la fila y en el botón', () => {
+    const d = disponerMano({ ancho: 1000, alto: 800 }, 5);
+    for (const [i, a] of d.fichas.entries()) {
+      const b = d.fichas[i + 1];
+      if (b !== undefined) expect(fichaEn({ x: (a.x + b.x) / 2, y: a.y }, d)).toBeNull();
+    }
+    expect(fichaEn({ x: 1, y: 1 }, d)).toBeNull();
+    expect(fichaEn({ x: d.deshacer.x + d.deshacer.ancho / 2, y: d.deshacer.y + d.deshacer.alto / 2 }, d)).toBeNull();
+  });
+
+  it('con una ventana asimétrica distingue x de y', () => {
+    // Las fichas quedan lejos de la diagonal x = y: un intercambio de coordenadas no encontraría ninguna.
+    const d = disponerMano({ ancho: 2400, alto: 600 }, 4);
+    for (const [i, f] of d.fichas.entries()) {
+      expect(Math.abs(f.x - f.y)).toBeGreaterThan(2 * f.radio);
+      expect(fichaEn({ x: f.x, y: f.y }, d)).toBe(i);
+    }
+  });
+
+  it('con una ventana degenerada no encuentra ninguna ficha', () => {
+    expect(fichaEn({ x: 0, y: 0 }, disponerMano({ ancho: 0, alto: 0 }, 5))).toBeNull();
   });
 });

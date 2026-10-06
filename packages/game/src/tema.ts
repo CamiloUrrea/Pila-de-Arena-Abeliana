@@ -41,8 +41,11 @@ export type Tema = {
      * demás celdas los fantasmas usan `grano`.
      */
     readonly fantasmaSobreVacia: number;
-    /** Color CSS del mensaje de error, que se pinta con el DOM antes de que exista PixiJS. */
-    readonly error: string;
+    /**
+     * Mensajes de error: el de la línea de información tras una acción imposible y el que se pinta con el DOM
+     * cuando la ronda no puede empezar.
+     */
+    readonly error: number;
   };
   readonly bandas: Bandas;
   readonly proporciones: {
@@ -67,6 +70,11 @@ export type Tema = {
     readonly radio: number;
     /** Grosor del contorno de un punto fantasma (previsto), como fracción de su radio. */
     readonly grosorFantasma: number;
+    /**
+     * Fantasmas de la colocación candidata (la del puntero), más tenues que los de las colocaciones hechas: un
+     * contorno más fino y con esta opacidad. El contorno de inestable prevista no se atenúa: es un aviso.
+     */
+    readonly candidata: { readonly grosor: number; readonly alfa: number };
   };
   /**
    * Contorno de una celda que la vista previa vuelve inestable: un trazo exterior y un filete interior. Con dos
@@ -128,7 +136,7 @@ export const TEMA: Tema = {
     grano: 0x0a0420,
     texto: 0xf5f0ff,
     fantasmaSobreVacia: 0xf5f0ff,
-    error: '#f1a08a',
+    error: 0xf1a08a,
   },
   bandas: BANDAS_INICIALES,
   proporciones: {
@@ -138,7 +146,7 @@ export const TEMA: Tema = {
     textoCelda: 0.42,
     textoInformacion: 0.28,
   },
-  granos: { desplazamiento: 0.25, radio: 0.085, grosorFantasma: 0.3 },
+  granos: { desplazamiento: 0.25, radio: 0.085, grosorFantasma: 0.3, candidata: { grosor: 0.2, alfa: 0.65 } },
   contornoPrevisto: { exterior: 0xff3d00, interior: 0x0a0420, grosor: 0.045 },
   mano: {
     margen: 0.06,

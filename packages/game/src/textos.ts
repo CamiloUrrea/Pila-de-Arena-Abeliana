@@ -1,7 +1,8 @@
 // Textos de la interfaz, en español y en un solo sitio. La descripción de cada grano se genera de sus datos
 // (`DEFINICIONES_GRANOS`), de modo que un tipo nuevo tiene texto sin tocar este módulo.
 import { DEFINICIONES_GRANOS } from '@pila/core';
-import type { DefinicionGrano, TipoGrano } from '@pila/core';
+import type { DefinicionGrano, MotivoIlegal, TipoGrano } from '@pila/core';
+import type { ErrorControlador } from './controlador.ts';
 
 export const TEXTOS = {
   deshacer: 'Deshacer',
@@ -103,4 +104,39 @@ export function describirGrano(
   definiciones: Readonly<Record<TipoGrano, DefinicionDescribible>> = DEFINICIONES_GRANOS,
 ): string {
   return describirDefinicion(definiciones[tipo]);
+}
+
+/** Mensaje de cada motivo de acción ilegal del núcleo; el tipo `Record` obliga a cubrirlos todos. */
+const MOTIVOS: Readonly<Record<MotivoIlegal, string>> = {
+  FaseIncorrecta: 'La ronda ha terminado: ya no se pueden colocar ni deshacer granos.',
+  IndiceManoInvalido: 'Ese grano no está en la mano.',
+  GranoYaColocado: 'Ese grano ya está colocado: deshazlo antes de moverlo.',
+  CeldaFueraDeRejilla: 'Esa casilla está fuera del tablero.',
+  NadaQueDeshacer: 'No hay nada que deshacer: todavía no has colocado ningún grano.',
+  ManoIncompleta: 'Faltan granos por colocar.',
+};
+
+/**
+ * Mensaje en español para cada error del controlador y del núcleo. Es exhaustiva: si aparece un tipo de error
+ * nuevo, el `switch` deja de compilar hasta que tenga su mensaje.
+ */
+export function describirError(error: ErrorControlador): string {
+  switch (error.tipo) {
+    case 'SinGranoSeleccionado':
+      return 'No hay ningún grano seleccionado: todos los granos de la mano están colocados.';
+    case 'GranoNoSeleccionable':
+      return 'Ese grano no se puede elegir: no está en la mano o ya está colocado.';
+    case 'NoEsLaUltimaColocacion':
+      return 'Solo se puede deshacer la última colocación: usa Deshacer.';
+    case 'GranoNoColocado':
+      return 'Ese grano no está colocado: no hay nada que deshacer en él.';
+    case 'AccionIlegal':
+      return MOTIVOS[error.motivo];
+    case 'ResolucionNoTermino':
+      return `La tirada no terminó en ${error.topeOleadas} oleadas.`;
+    default: {
+      const desconocido: never = error;
+      return `Error desconocido: ${JSON.stringify(desconocido)}`;
+    }
+  }
 }

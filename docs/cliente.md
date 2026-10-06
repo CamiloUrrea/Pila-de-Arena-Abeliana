@@ -1,6 +1,6 @@
 # Cliente web (`@pila/game`)
 
-El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, la semilla y el lado; en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano. Desde T3.2a el jugador coloca los granos de la mano sobre las celdas, puede deshacer y ve una vista previa de lo que sumarán. Todavía no hay botón Confirmar, animaciones (T3.3), elección manual del grano (T3.2b), indicadores ni sonido.
+El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, la semilla y el lado; en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano. El jugador elige qué grano de la mano coloca (T3.2b), lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Todavía no hay botón Confirmar, animaciones (T3.3), indicadores ni sonido.
 
 ## Arrancarlo
 
@@ -25,13 +25,26 @@ Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4`. Un parámetro present
 
 | Gesto | Efecto |
 | --- | --- |
-| Clic o toque en una celda | Coloca ahí el grano seleccionado. Después se selecciona el siguiente grano sin colocar (el de menor índice), o ninguno si la mano está completa. |
+| Clic o toque en una ficha sin colocar | La selecciona. |
+| Teclas `1` a `9` | Seleccionan la ficha con ese número (la `1` es la primera de la mano). |
+| Flecha izquierda o derecha | Pasa a la ficha sin colocar anterior o siguiente, de forma circular, saltando las colocadas. |
+| Clic o toque en una celda | Coloca ahí el grano seleccionado. |
 | Clic o toque en «Deshacer» | Deshace la colocación más reciente y vuelve a seleccionar ese grano. |
-| `Z` o `Retroceso` | Lo mismo que «Deshacer» (sin Ctrl, Alt ni Cmd). |
+| Clic o toque en la última ficha colocada | Lo mismo que «Deshacer». En otra ficha colocada, un mensaje explica que solo se puede deshacer la última. |
+| `Z` o `Retroceso` | Lo mismo que «Deshacer». |
+| Pasar el ratón por una celda | Vista previa de la colocación candidata (ver más abajo). |
 
-El grano seleccionado se elige solo: al empezar es el primero de la mano. Una acción que el núcleo rechaza (deshacer sin nada colocado, tocar una celda con la mano completa) no hace nada visible. El cursor es una mano sobre las celdas cuando hay un grano seleccionado y sobre el botón cuando está activo.
+Las teclas no hacen nada con Ctrl, Alt o Cmd pulsados, para no interferir con los atajos del sistema y del navegador; Mayúsculas sí se admite, para que `Z` funcione.
 
-**Banda inferior.** Las fichas de la mano van en una fila centrada, en el orden de la mano: el normal es un círculo casi blanco, el pesado un círculo mayor violeta con dos puntos y el explosivo una estrella roja. Una ficha ya colocada se atenúa y la seleccionada lleva un anillo. Debajo, una línea describe el grano seleccionado («Explosivo: +1 en la celda y +1 en cada vecina») o dice «Mano completa». El botón «Deshacer» está a la derecha y se ve apagado cuando no hay nada que deshacer. Las fichas son de solo lectura: tocarlas no hace nada.
+**Regla de selección.** Al empezar se selecciona el primer grano de la mano. Tras colocar el grano `i` se selecciona el siguiente sin colocar con índice mayor que `i`; si no hay ninguno, el de menor índice sin colocar; y ninguno si la mano está completa. Tras deshacer se selecciona el grano deshecho. Así, colocar en orden recorre la mano de izquierda a derecha, y elegir una ficha a mano no hace volver al principio.
+
+**Mensajes.** Una acción imposible (elegir una ficha colocada, deshacer sin nada colocado, tocar una celda con la mano completa, tocar una ficha colocada que no es la última…) no cambia nada, y la línea de información muestra en rojo claro por qué hasta la siguiente acción. Los mensajes los da `describirError`.
+
+El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre las fichas sin colocar y la última colocada, y sobre el botón cuando está activo.
+
+**Vista previa al pasar el ratón.** Con un grano seleccionado, al pasar el ratón por una celda se dibuja lo que sumaría colocarlo ahí: sus puntos fantasma, más finos y tenues que los de los granos ya colocados, y el doble contorno si esa colocación volvería inestable alguna celda. Al salir del tablero o del lienzo, la vista previa desaparece. Con un dedo o un lápiz no hay «pasar por encima», así que en pantallas táctiles solo se ve la vista previa de los granos ya colocados.
+
+**Banda inferior.** Las fichas de la mano van en una fila centrada, en el orden de la mano: el normal es un círculo casi blanco, el pesado un círculo mayor violeta con dos puntos y el explosivo una estrella roja. Una ficha ya colocada se atenúa y la seleccionada lleva un anillo. Debajo, la línea de información describe el grano seleccionado («Explosivo: +1 en la celda y +1 en cada vecina»), dice «Mano completa» o muestra el mensaje de la última acción imposible. El botón «Deshacer» está a la derecha y se ve apagado cuando no hay nada que deshacer.
 
 ## Arquitectura
 
@@ -41,25 +54,33 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 | --- | --- | --- |
 | `src/parametros.ts` | `leerParametros(busqueda, generarSemilla)`: parsea la URL y devuelve los parámetros o una lista de errores tipados con su mensaje. La semilla por defecto la da la función inyectada. | Sí |
 | `src/tema.ts` | Datos del aspecto: colores, bandas, proporciones, tipografía, fichas, vista previa y botón. | Sí (solo datos) |
-| `src/textos.ts` | `TEXTOS`, los textos de la interfaz, y `describirGrano(tipo)`, la descripción de un grano generada de `DEFINICIONES_GRANOS`. | Sí |
-| `src/controlador.ts` | `iniciarControlador`, `colocar` y `deshacer` sobre un estado de interfaz `{ estado, seleccionado }`. | Sí |
-| `src/previsualizacion.ts` | `calcularPrevistas(estado)`: la rejilla proyectada y los granos previstos por celda. | Sí |
-| `src/disposicion.ts` | `disponer(ancho, alto, lado)`: la geometría de las bandas y de cada celda. `disponerMano(ventana, n)`: las fichas, la descripción y el botón. `celdaEn` y `botonDeshacerEn`: qué hay bajo un punto. | Sí |
-| `src/vista.ts` | `describirCeldas(celdas, umbral, previstas?)`: posición lógica, carga, puntos sólidos y fantasma, número de respaldo, colores e inestabilidad actual y prevista de cada celda. Recibe matrices, no el estado, para reutilizarla en las animaciones. | Sí |
+| `src/textos.ts` | `TEXTOS`, los textos de la interfaz; `describirGrano(tipo)`, la descripción de un grano generada de `DEFINICIONES_GRANOS`; y `describirError(error)`, el mensaje de cada error del controlador y del núcleo. | Sí |
+| `src/entrada.ts` | `accionDeTecla({ tecla, ctrl, alt, meta })`: qué gesto dispara una tecla, o `null`. | Sí |
+| `src/controlador.ts` | `iniciarControlador`, `seleccionar`, `ciclar`, `colocar`, `deshacer` y `deshacerDesdeFicha` sobre un estado de interfaz `{ estado, seleccionado }`. | Sí |
+| `src/previsualizacion.ts` | `calcularPrevistas(estado)`: la rejilla proyectada y los granos previstos por celda. `calcularPrevistasConCandidata(estado, indice, celda)`: lo mismo con una colocación hipotética más, y aparte lo que añade solo ella. | Sí |
+| `src/disposicion.ts` | `disponer(ancho, alto, lado)`: la geometría de las bandas y de cada celda. `disponerMano(ventana, n)`: las fichas, la descripción y el botón. `celdaEn`, `fichaEn` y `botonDeshacerEn`: qué hay bajo un punto. | Sí |
+| `src/vista.ts` | `describirCeldas(celdas, umbral, previstas?, candidatas?)`: posición lógica, carga, puntos sólidos, fantasma y de la candidata, número de respaldo, colores e inestabilidad actual, prevista y prevista solo por la candidata de cada celda. Recibe matrices, no el estado, para reutilizarla en las animaciones. | Sí |
 | `src/render.ts` | `crearEscena(contenedor, semilla)`: crea la aplicación de PixiJS ajustada a la ventana y a la densidad de píxeles, expone `mostrarEstado(estado)`, atiende el puntero y el teclado, y redibuja tras cada acción y al redimensionar. Es el único módulo que importa PixiJS. | No |
 | `src/main.ts` | Punto de entrada: lee los parámetros, crea la ronda y la muestra, o muestra el error. | No |
 
-**Controlador puro y dibujo.** `controlador.ts` decide qué acción del núcleo dispara cada gesto y qué grano queda seleccionado; `render.ts` solo traduce el puntero y el teclado a esas llamadas y vuelve a dibujar. El controlador usa solo la interfaz pública de `core`, nunca lanza ni muta, y `colocar` y `deshacer` devuelven un `Resultado` con el nuevo estado de interfaz y los eventos del núcleo:
+**Controlador puro y dibujo.** `controlador.ts` decide qué acción del núcleo dispara cada gesto y qué grano queda seleccionado; `entrada.ts` traduce las teclas a gestos; `render.ts` solo pasa el puntero y el teclado a esas funciones, muestra el mensaje de los errores y vuelve a dibujar. El controlador usa solo la interfaz pública de `core`, nunca lanza ni muta, y todas sus funciones salvo `iniciarControlador` devuelven un `Resultado` con el nuevo estado de interfaz y los eventos del núcleo:
 
 - `iniciarControlador(estado)` devuelve directamente `{ estado, seleccionado }` con el primer grano sin colocar (o `null`), porque no puede fallar.
-- `colocar(ui, x, y)` aplica `Colocar` con el grano seleccionado y selecciona el siguiente sin colocar. Sin grano seleccionado devuelve el error propio `SinGranoSeleccionado`; los errores del núcleo (`CeldaFueraDeRejilla`, `FaseIncorrecta`…) se devuelven tal cual.
+- `seleccionar(ui, indice)` selecciona un grano de la mano sin colocar; con un índice colocado, fuera de rango o no entero devuelve `GranoNoSeleccionable`. No cambia el estado del núcleo.
+- `ciclar(ui, direccion)` pasa a la ficha sin colocar siguiente (`+1`) o anterior (`−1`), de forma circular. Sin granos sin colocar no hace nada; nunca falla.
+- `colocar(ui, x, y)` aplica `Colocar` con el grano seleccionado y sigue la regla de selección. Sin grano seleccionado devuelve `SinGranoSeleccionado`; los errores del núcleo (`CeldaFueraDeRejilla`, `FaseIncorrecta`…) se devuelven tal cual.
 - `deshacer(ui)` aplica `Deshacer` y selecciona el grano que acaba de quedar libre; sin colocaciones devuelve `NadaQueDeshacer` del núcleo.
+- `deshacerDesdeFicha(ui, indice)` equivale a `deshacer` si ese grano es el último colocado (el último de `ordenColocacion`); si está colocado pero no es el último, devuelve `NoEsLaUltimaColocacion`; si no está colocado, `GranoNoColocado`.
 
-El controlador todavía no conoce `Confirmar`. Las pruebas comprueban que cualquier secuencia de gestos deja el mismo estado que aplicar a mano las mismas acciones del núcleo, y que ese estado pasa `validarEstado`.
+El controlador todavía no conoce `Confirmar`. Las pruebas comprueban que cualquier secuencia de gestos deja el mismo estado que aplicar a mano las acciones del núcleo equivalentes, que ese estado pasa `validarEstado` y que `seleccionado` es siempre `null` (solo con la mano completa) o un grano sin colocar.
+
+`describirError` es exhaustiva sobre los errores del controlador y del núcleo: un `switch` con comprobación `never` y una tabla `Record<MotivoIlegal, string>`, así que un error nuevo no compila hasta tener su mensaje.
 
 **Vista previa.** En el núcleo, `Colocar` es provisional: asigna una celda al grano, pero la rejilla no cambia hasta `Confirmar`. `calcularPrevistas(estado)` toma las colocaciones de la mano y llama a `aplicarAdiciones`, la misma función del núcleo que usa `Confirmar`, así que no duplica ninguna regla de los granos (los vecinos del explosivo, lo que cae fuera…). Devuelve la rejilla proyectada y los granos previstos por celda (proyectada menos actual). Las pruebas la comparan celda a celda con los `AdicionAplicada` de un `Confirmar` real. La vista previa no incluye los derrumbes, que se verán con las animaciones.
 
 `describirCeldas` dibuja en cada celda `carga + previstos` puntos con la disposición tipo dado de ese total: los primeros `carga` son sólidos y el resto son fantasma (solo el contorno). Desde 10 en total vuelve el número de respaldo, con el total. Una celda estable que la vista previa llevaría a `umbral` o más se marca `inestablePrevista` y lleva un doble contorno.
+
+**Candidata.** `calcularPrevistasConCandidata(estado, indice, celda)` añade a las colocaciones ya hechas una colocación hipotética del grano seleccionado en la celda del ratón y llama otra vez a `aplicarAdiciones`, sin pasar por `aplicar` ni tocar el estado. Devuelve la proyección, las previstas totales y, aparte, las que añade solo la candidata. Sin grano seleccionado (o si ya está colocado) o con la celda fuera de la rejilla, devuelve lo mismo que `calcularPrevistas`. Las pruebas la comparan con colocar de verdad ese grano y calcular las previstas. En `describirCeldas`, los últimos fantasmas de cada celda son los de la candidata (`candidata: true`), y `inestablePorCandidata` marca las celdas que solo la candidata vuelve inestables.
 
 **Disposición.** La ventana se reparte en tres bandas horizontales: indicadores arriba, tablero en el centro y mano abajo. El tablero es el mayor cuadrado que cabe en la banda central menos un margen. Las celdas son cuadradas e iguales, con un hueco proporcional a su tamaño, y el conjunto queda centrado. Así cabe en cualquier forma de ventana: ancha, estrecha o muy pequeña. Con una ventana de tamaño 0 las celdas miden 0, nunca NaN. Las celdas se indexan `celdas[y][x]`, igual que la rejilla del núcleo.
 
@@ -106,7 +127,8 @@ Todo el aspecto vive en `src/tema.ts`, en el objeto `TEMA`:
   | Ficha normal, pesada y explosiva | `#F5F0FF`, `#B388FF` y `#FF1744` |
   | Botón activo | Fondo `#F5F0FF` y texto `#0A0420` |
   | Botón desactivado | Fondo `#22144D` y texto `#6F6596` |
-- **`granos`:** el desplazamiento de la disposición tipo dado y el radio de los puntos, en fracciones del lado de la celda, y el grosor del contorno de los fantasmas, en fracción de su radio.
+  | Mensajes de error | `#F1A08A`, en la línea de información y en la página de error de inicio |
+- **`granos`:** el desplazamiento de la disposición tipo dado y el radio de los puntos, en fracciones del lado de la celda, el grosor del contorno de los fantasmas, en fracción de su radio, y el estilo de los fantasmas de la candidata: un contorno más fino (0,2 frente a 0,3) con opacidad 0,65. El contorno de inestable prevista no se atenúa con la candidata, porque es un aviso.
 - **`contornoPrevisto`:** los dos colores del contorno de una celda inestable prevista y su grosor.
 - **`mano`:** margen de la banda inferior, alto de la fila de fichas, hueco entre fichas, tamaño y forma del botón y tamaño de sus textos.
 - **`fichas`:** forma (`circulo` o `estrella`), color, escala y puntos de cada tipo; opacidad de las colocadas, anillo de la seleccionada y forma de la estrella.
@@ -126,7 +148,9 @@ Los colores son provisionales: el arte definitivo sustituirá el tema sin tocar 
 - el texto de la banda superior contra el fondo: al menos 7;
 - el doble contorno de una inestable prevista contra el fondo y contra cada celda estable: al menos 3 con uno de sus dos trazos (ningún color único puede contrastar a la vez con el fondo oscuro, el amarillo y el rosa);
 - los puntos fantasma contra la celda en la que se dibujan, de carga 0 a 5: al menos 3 (nunca se dibujan sobre el fondo);
-- cada ficha contra el fondo: al menos 3; el botón activo contra el fondo, al menos 3, y su texto, al menos 4,5.
+- cada ficha contra el fondo: al menos 3; el botón activo contra el fondo, al menos 3, y su texto, al menos 4,5;
+- los fantasmas de la candidata, mezclados con su opacidad sobre la celda en la que se dibujan, de carga 0 a 5: al menos 3;
+- el mensaje de error contra el fondo: al menos 4,5.
 
 ## Reglas de importación
 

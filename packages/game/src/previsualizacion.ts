@@ -19,3 +19,31 @@ export function calcularPrevistas(estado: Estado): Prevision {
   const previstas = proyectada.map((fila, y) => fila.map((valor, x) => Math.max(0, valor - (estado.celdas[y]?.[x] ?? 0))));
   return { proyectada, previstas };
 }
+
+export type PrevisionConCandidata = Prevision & {
+  /** Granos que añade solo la candidata, indexados `[y][x]`: la diferencia con la previsión sin ella. */
+  readonly candidata: Estado['celdas'];
+};
+
+/**
+ * Vista previa con una colocación hipotética: el grano `indiceSeleccionado` en `celda`, sumado a las colocaciones
+ * provisionales ya hechas. No llama a `aplicar` ni modifica `estado`. Sin grano seleccionado (o si ya está
+ * colocado), o con la celda fuera de la rejilla, devuelve lo mismo que `calcularPrevistas` y la candidata a cero.
+ */
+export function calcularPrevistasConCandidata(
+  estado: Estado,
+  indiceSeleccionado: number | null,
+  celda: { readonly x: number; readonly y: number } | null,
+): PrevisionConCandidata {
+  const base = calcularPrevistas(estado);
+  const grano = indiceSeleccionado === null ? undefined : estado.mano[indiceSeleccionado];
+  const lado = estado.celdas.length;
+  const dentro = (v: number): boolean => Number.isInteger(v) && v >= 0 && v < lado;
+  if (grano === undefined || grano.celda !== null || celda === null || !dentro(celda.x) || !dentro(celda.y)) {
+    return { ...base, candidata: base.previstas.map((fila) => fila.map(() => 0)) };
+  }
+  const { celdas: proyectada } = aplicarAdiciones(base.proyectada, [{ tipo: grano.tipo, x: celda.x, y: celda.y }]);
+  const previstas = proyectada.map((fila, y) => fila.map((valor, x) => Math.max(0, valor - (estado.celdas[y]?.[x] ?? 0))));
+  const candidata = proyectada.map((fila, y) => fila.map((valor, x) => valor - (base.proyectada[y]?.[x] ?? 0)));
+  return { proyectada, previstas, candidata };
+}

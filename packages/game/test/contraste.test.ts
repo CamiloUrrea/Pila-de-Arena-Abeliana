@@ -89,3 +89,25 @@ describe('contraste de la vista previa y de la mano (WCAG)', () => {
     expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('contraste de la candidata y del mensaje de error (WCAG)', () => {
+  /** Mezcla `color` con opacidad `alfa` sobre `fondo`, canal a canal en sRGB, como compone el lienzo. */
+  const mezclar = (color: number, fondo: number, alfa: number): number =>
+    [16, 8, 0].reduce((acc, s) => acc | (Math.round(((color >> s) & 0xff) * alfa + ((fondo >> s) & 0xff) * (1 - alfa)) << s), 0);
+
+  it.each([0, 1, 2, 3, 4, 5])('los fantasmas de la candidata, tenues, se distinguen sobre una celda con carga %i (al menos 3)', (carga) => {
+    const [c] = describirCeldas([[carga]], 4, [[1]], [[1]]);
+    if (c === undefined) throw new Error('sin descripción');
+    const { alfa } = TEMA.granos.candidata;
+    expect(alfa).toBeLessThan(1);
+    expect(contraste(mezclar(c.colorTinta, c.color, alfa), c.color)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('los fantasmas de la candidata son más tenues que los de las colocaciones hechas', () => {
+    expect(TEMA.granos.candidata.grosor).toBeLessThan(TEMA.granos.grosorFantasma);
+  });
+
+  it('el mensaje de error se lee sobre el fondo (al menos 4,5)', () => {
+    expect(contraste(colores.error, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+});

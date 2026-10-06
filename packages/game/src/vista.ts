@@ -10,6 +10,8 @@ export type PuntoGrano = {
   readonly y: number;
   /** Grano previsto por la vista previa, todavía no en la rejilla: se dibuja hueco, solo el contorno. */
   readonly fantasma: boolean;
+  /** Fantasma que añade la colocación candidata (la del puntero), no una colocación ya hecha: se dibuja más tenue. */
+  readonly candidata: boolean;
 };
 
 export type CeldaDescrita = {
@@ -18,11 +20,13 @@ export type CeldaDescrita = {
   /** Fila. */
   readonly y: number;
   readonly carga: number;
-  /** Granos que la vista previa sumaría a esta celda. */
+  /** Granos que la vista previa sumaría a esta celda, contando los de la candidata. */
   readonly previstos: number;
+  /** De los previstos, los que añade solo la colocación candidata. */
+  readonly candidatos: number;
   /**
    * Un punto por grano, contando los previstos (`carga + previstos`): los primeros `carga` son sólidos y el resto
-   * fantasma. Vacío con 0 granos y con demasiados para dibujarlos (ver `texto`).
+   * fantasma, con los `candidatos` al final. Vacío con 0 granos y con demasiados para dibujarlos (ver `texto`).
    */
   readonly granos: readonly PuntoGrano[];
   /** Radio común de los puntos, en fracciones del lado de la celda. */
@@ -39,6 +43,8 @@ export type CeldaDescrita = {
   readonly inestable: boolean;
   /** La celda es estable ahora, pero los granos previstos la llevarían a `umbral` o más. */
   readonly inestablePrevista: boolean;
+  /** Es inestable prevista solo por la candidata: sin ella, la proyección no llegaría a `umbral`. */
+  readonly inestablePorCandidata: boolean;
 };
 
 // Fila o columna exterior negativa (N) y positiva (P), en unidades del desplazamiento.
@@ -69,12 +75,15 @@ export const PATRONES_GRANOS: readonly (readonly (readonly [number, number])[])[
 
 /**
  * Describe cada celda de la rejilla, por filas (y, luego x). `previstas` son los granos que la vista previa sumaría
- * a cada celda, indexados `[y][x]` (ver `calcularPrevistas`); sin ella no hay nada previsto. No modifica la entrada.
+ * a cada celda, indexados `[y][x]` (ver `calcularPrevistas`); sin ella no hay nada previsto. `candidatas` son los
+ * que, de esos, añade solo la colocación candidata (ver `calcularPrevistasConCandidata`); nunca más que los
+ * previstos de la celda. No modifica la entrada.
  */
 export function describirCeldas(
   celdas: Estado['celdas'],
   umbral: number,
   previstas?: Estado['celdas'],
+  candidatas?: Estado['celdas'],
   tema: Tema = TEMA,
 ): CeldaDescrita[] {
   const { carga: colores, inestable: colorInestable, grano, fantasmaSobreVacia } = tema.colores;
@@ -82,6 +91,7 @@ export function describirCeldas(
   return celdas.flatMap((fila, y) =>
     fila.map((carga, x) => {
       const previstos = Math.max(0, previstas?.[y]?.[x] ?? 0);
+      const candidatos = Math.min(previstos, Math.max(0, candidatas?.[y]?.[x] ?? 0));
       const total = carga + previstos;
       const inestable = carga >= umbral;
       const color = inestable ? colorInestable : (colores[Math.min(carga, colores.length - 1)] ?? colorInestable);
@@ -90,6 +100,7 @@ export function describirCeldas(
         x: px * desplazamiento,
         y: py * desplazamiento,
         fantasma: i >= carga,
+        candidata: i >= total - candidatos,
       }));
       const texto = patron === undefined ? String(total) : undefined;
       return {
@@ -97,6 +108,7 @@ export function describirCeldas(
         y,
         carga,
         previstos,
+        candidatos,
         granos,
         radioGrano: radio,
         texto,
@@ -104,6 +116,7 @@ export function describirCeldas(
         colorTinta: carga === 0 ? fantasmaSobreVacia : grano,
         inestable,
         inestablePrevista: !inestable && total >= umbral,
+        inestablePorCandidata: !inestable && total >= umbral && total - candidatos < umbral,
       };
     }),
   );
