@@ -220,6 +220,10 @@ describe('contraste del fin de ronda (WCAG)', () => {
     expect(peor(texto)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('las estadísticas de la sesión y la pista de copiar contra el velo (al menos 4,5)', () => {
+    expect(peor(TEMA.finDeRonda.secundario)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('el botón «Otra ronda» sobre el velo (al menos 3) y su texto sobre el botón (al menos 4,5)', () => {
     expect(peor(activo.fondo)).toBeGreaterThanOrEqual(3);
     expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);

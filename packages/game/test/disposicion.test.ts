@@ -431,8 +431,13 @@ describe('disposición de los indicadores y del mazo', () => {
 function comprobarFin(ancho: number, alto: number): void {
   const d = disponerFinDeRonda({ ancho, alto });
   const ventana = { x: 0, y: 0, ancho, alto };
-  const piezas = [d.titulo, ...d.lineas, d.boton];
-  expect(d.lineas).toHaveLength(2);
+  const piezas = [d.titulo, ...d.lineas, d.boton, d.pista];
+  expect(d.lineas).toHaveLength(3);
+  // El orden de arriba abajo: título, líneas, botón y pista.
+  for (const [i, a] of piezas.entries()) {
+    const b = piezas[i + 1];
+    if (b !== undefined) expect(b.y).toBeGreaterThanOrEqual(a.y + a.alto - EPS);
+  }
   expect(d.velo).toEqual(disponer(ancho, alto, 1).bandaCentral);
   for (const r of [d.velo, ...piezas]) {
     expect(finito(r)).toBe(true);

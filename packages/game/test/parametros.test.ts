@@ -9,18 +9,18 @@ const leer = (busqueda: string) => leerParametros(busqueda, generar);
 
 describe('parámetros de la URL', () => {
   it('lee valores válidos: ?semilla=2026&lado=4', () => {
-    expect(leer('?semilla=2026&lado=4')).toEqual({ ok: true, valor: { semilla: 2026, lado: 4, ritmo: 1 } });
+    expect(leer('?semilla=2026&lado=4')).toEqual({ ok: true, valor: { semilla: 2026, lado: 4, ritmo: 1, jugador: null } });
   });
 
   it('acepta los extremos: semilla 0 y 4294967295, lado 1 y 9; también sin «?»', () => {
-    expect(leer('semilla=0&lado=1')).toEqual({ ok: true, valor: { semilla: 0, lado: 1, ritmo: 1 } });
-    expect(leer('?semilla=4294967295&lado=9')).toEqual({ ok: true, valor: { semilla: 4294967295, lado: 9, ritmo: 1 } });
+    expect(leer('semilla=0&lado=1')).toEqual({ ok: true, valor: { semilla: 0, lado: 1, ritmo: 1, jugador: null } });
+    expect(leer('?semilla=4294967295&lado=9')).toEqual({ ok: true, valor: { semilla: 4294967295, lado: 9, ritmo: 1, jugador: null } });
   });
 
   it('sin parámetros usa el lado por defecto (3) y la semilla de la función inyectada', () => {
     expect(LADO_POR_DEFECTO).toBe(3);
-    expect(leer('')).toEqual({ ok: true, valor: { semilla: SEMILLA_INYECTADA, lado: 3, ritmo: 1 } });
-    expect(leer('?lado=5')).toEqual({ ok: true, valor: { semilla: SEMILLA_INYECTADA, lado: 5, ritmo: 1 } });
+    expect(leer('')).toEqual({ ok: true, valor: { semilla: SEMILLA_INYECTADA, lado: 3, ritmo: 1, jugador: null } });
+    expect(leer('?lado=5')).toEqual({ ok: true, valor: { semilla: SEMILLA_INYECTADA, lado: 5, ritmo: 1, jugador: null } });
   });
 
   it('solo llama a la función de semilla cuando la URL no trae una', () => {
@@ -36,7 +36,7 @@ describe('parámetros de la URL', () => {
   });
 
   it('ignora los parámetros desconocidos', () => {
-    expect(leer('?modo=rapido&semilla=9&x=&lado=2&debug')).toEqual({ ok: true, valor: { semilla: 9, lado: 2, ritmo: 1 } });
+    expect(leer('?modo=rapido&semilla=9&x=&lado=2&debug')).toEqual({ ok: true, valor: { semilla: 9, lado: 2, ritmo: 1, jugador: null } });
   });
 
   it.each(['0', '10', '3.5', 'tres', '', '-1', '+3', ' 3', '3e0'])('rechaza lado=%j con un mensaje claro', (lado) => {
@@ -67,7 +67,7 @@ describe('parámetros de la URL', () => {
   it('propiedad: cualquier par válido se lee tal cual', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), fc.integer({ min: 1, max: 9 }), (semilla, lado) => {
-        expect(leer(`?lado=${lado}&semilla=${semilla}`)).toEqual({ ok: true, valor: { semilla, lado, ritmo: 1 } });
+        expect(leer(`?lado=${lado}&semilla=${semilla}`)).toEqual({ ok: true, valor: { semilla, lado, ritmo: 1, jugador: null } });
       }),
     );
   });
@@ -75,14 +75,14 @@ describe('parámetros de la URL', () => {
 
 describe('parámetro ritmo', () => {
   it('lee ?ritmo=2 y, sin él, usa 1', () => {
-    expect(leer('?semilla=1&ritmo=2')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 2 } });
-    expect(leer('?semilla=1')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 1 } });
+    expect(leer('?semilla=1&ritmo=2')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 2, jugador: null } });
+    expect(leer('?semilla=1')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 1, jugador: null } });
   });
 
   it.each(RITMOS.map((r) => [r]))('acepta el ritmo permitido %d, con punto o con coma', (r) => {
-    expect(leer(`?semilla=1&ritmo=${r}`)).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: r } });
+    expect(leer(`?semilla=1&ritmo=${r}`)).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: r, jugador: null } });
     const conComa = String(r).replace('.', ',');
-    expect(leer(`?semilla=1&ritmo=${encodeURIComponent(conComa)}`)).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: r } });
+    expect(leer(`?semilla=1&ritmo=${encodeURIComponent(conComa)}`)).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: r, jugador: null } });
   });
 
   it.each(['0', '-1', '5', '1.2', '1,2', 'rapido', '', ' 1', '2e0', '0.30', '+2', '1.'])('rechaza ritmo=%j con un mensaje claro', (ritmo) => {
@@ -98,7 +98,7 @@ describe('parámetro ritmo', () => {
   });
 
   it('acepta valores equivalentes escritos con ceros de más, como 0.50', () => {
-    expect(leer('?semilla=1&ritmo=0.50')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 0.5 } });
+    expect(leer('?semilla=1&ritmo=0.50')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 0.5, jugador: null } });
   });
 });
 
@@ -130,7 +130,7 @@ describe('urlConSemilla', () => {
 
   it('el resultado se lee de vuelta con leerParametros con la semilla nueva y el resto igual', () => {
     const r = leer(urlConSemilla('?lado=6&ritmo=3&semilla=1', 31337));
-    expect(r).toEqual({ ok: true, valor: { semilla: 31337, lado: 6, ritmo: 3 } });
+    expect(r).toEqual({ ok: true, valor: { semilla: 31337, lado: 6, ritmo: 3, jugador: null } });
   });
 
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 4294967296])('con la semilla inválida %d no lanza y deja la consulta igual', (s) => {
@@ -157,5 +157,46 @@ describe('semillaAleatoria', () => {
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(0xffffffff);
     }
+  });
+});
+
+describe('parámetro jugador', () => {
+  it.each(['Ana', 'José', 'María-José', 'Ana Luz', 'p_07', 'Ñandú', 'Zoë 2', 'x', 'abcdefghijklmnopqrstuvwx'])(
+    'acepta jugador=%j',
+    (jugador) => {
+      expect(leer(`?semilla=1&jugador=${encodeURIComponent(jugador)}`)).toEqual({
+        ok: true,
+        valor: { semilla: 1, lado: 3, ritmo: 1, jugador },
+      });
+    },
+  );
+
+  it('normaliza los acentos escritos con marcas combinadas (NFC)', () => {
+    const r = leer(`?semilla=1&jugador=${encodeURIComponent('Jose\u0301')}`);
+    expect(r.ok && r.valor.jugador).toBe('José');
+  });
+
+  it('sin jugador es null', () => {
+    expect(leer('?semilla=1')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 1, jugador: null } });
+  });
+
+  it.each(['', '   ', 'abcdefghijklmnopqrstuvwxy', 'Ana,Luz', 'Ana"', "O'Neil", 'a/b', '<b>x</b>', 'tab\tx', 'a;b', 'Ana\nLuz'])(
+    'rechaza jugador=%j con un mensaje claro',
+    (jugador) => {
+      const r = leer(`?semilla=1&jugador=${encodeURIComponent(jugador)}`);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.errores.map((e) => e.campo)).toEqual(['jugador']);
+        expect(r.errores[0]?.tipo).toBe('ParametroInvalido');
+        expect(r.errores[0]?.mensaje).toBe(
+          `El jugador debe tener de 1 a 24 caracteres entre letras, cifras, espacio, guion y guion bajo; se recibió «${jugador}».`,
+        );
+      }
+    },
+  );
+
+  it('urlConSemilla conserva el jugador', () => {
+    const r = urlConSemilla(`?jugador=${encodeURIComponent('María José')}&lado=4&semilla=1`, 9);
+    expect(leer(r)).toEqual({ ok: true, valor: { semilla: 9, lado: 4, ritmo: 1, jugador: 'María José' } });
   });
 });

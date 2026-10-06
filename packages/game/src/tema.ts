@@ -216,6 +216,8 @@ export type Tema = {
     readonly velo: { readonly color: number; readonly opacidad: number };
     readonly titulo: { readonly ganada: number; readonly perdida: number };
     readonly texto: number;
+    /** Texto secundario: las estadísticas de la sesión y la pista de copiar. */
+    readonly secundario: number;
   };
   readonly tipografia: {
     /** Fuente del sistema. */
@@ -324,6 +326,7 @@ export const TEMA: Tema = {
     velo: { color: 0x0a0420, opacidad: 0.92 },
     titulo: { ganada: 0xffe600, perdida: 0xff2e93 },
     texto: 0xf5f0ff,
+    secundario: 0xb8aee0,
   },
   tipografia: {
     familia: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',

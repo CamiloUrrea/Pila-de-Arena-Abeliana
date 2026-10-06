@@ -25,7 +25,17 @@ describe('faseDeFlujo', () => {
 });
 
 describe('permitida', () => {
-  const ACCIONES: readonly AccionFlujo[] = ['seleccionar', 'ciclar', 'colocar', 'deshacer', 'confirmar', 'ritmo', 'saltar', 'otraRonda'];
+  const ACCIONES: readonly AccionFlujo[] = [
+    'seleccionar',
+    'ciclar',
+    'colocar',
+    'deshacer',
+    'confirmar',
+    'ritmo',
+    'saltar',
+    'otraRonda',
+    'copiar',
+  ];
 
   /** Tabla esperada, explícita: cada acción en cada fase. */
   const TABLA: Readonly<Record<FaseFlujo, Readonly<Record<AccionFlujo, boolean>>>> = {
@@ -38,6 +48,7 @@ describe('permitida', () => {
       ritmo: true,
       saltar: false,
       otraRonda: false,
+      copiar: true,
     },
     animando: {
       seleccionar: false,
@@ -48,6 +59,7 @@ describe('permitida', () => {
       ritmo: true,
       saltar: true,
       otraRonda: false,
+      copiar: true,
     },
     fin: {
       seleccionar: false,
@@ -58,6 +70,7 @@ describe('permitida', () => {
       ritmo: true,
       saltar: false,
       otraRonda: true,
+      copiar: true,
     },
   };
 
@@ -67,8 +80,9 @@ describe('permitida', () => {
     });
   }
 
-  it('el ritmo se acepta en todas las fases', () => {
+  it('el ritmo y copiar el registro se aceptan en todas las fases', () => {
     expect((['jugando', 'animando', 'fin'] as const).every((f) => permitida(f, 'ritmo'))).toBe(true);
+    expect((['jugando', 'animando', 'fin'] as const).every((f) => permitida(f, 'copiar'))).toBe(true);
   });
 });
 

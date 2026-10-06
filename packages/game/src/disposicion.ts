@@ -222,14 +222,16 @@ export type DisposicionFinDeRonda = {
   /** Cubre la banda central, donde está el tablero. */
   readonly velo: Rect;
   readonly titulo: Rect;
-  /** Una línea por dato del resultado: los puntos y las tiradas usadas. */
+  /** Una línea por dato del resultado: los puntos, las tiradas usadas y las estadísticas de la sesión. */
   readonly lineas: readonly Rect[];
   readonly boton: Rect;
+  /** La pista de copiar el registro, bajo el botón. */
+  readonly pista: Rect;
 };
 
 /**
- * Dispone el fin de ronda: un velo sobre la banda central y, dentro, el título, las dos líneas del resultado y el
- * botón «Otra ronda», apilados y centrados. La columna se escala con el menor de los lados del velo, así que cabe en
+ * Dispone el fin de ronda: un velo sobre la banda central y, dentro, el título, las tres líneas del resultado, el
+ * botón «Otra ronda» y la pista de copiar, apilados y centrados. La columna se escala con el menor de los lados del velo, así que cabe en
  * cualquier ventana; una ventana degenerada da tamaños 0, nunca NaN.
  */
 export function disponerFinDeRonda(ventana: Ventana, tema: Tema = TEMA): DisposicionFinDeRonda {
@@ -239,18 +241,19 @@ export function disponerFinDeRonda(ventana: Ventana, tema: Tema = TEMA): Disposi
   const alto = Math.max(0, velo.alto - 2 * margen);
   // Alto de la columna: limitado por el alto disponible y por el ancho, para no estirarse en ventanas anchas.
   const columna = Math.min(alto, ancho * 0.7);
-  const hueco = columna * 0.1;
+  const hueco = columna * 0.058;
   let y = velo.y + margen + (alto - columna) / 2;
   const fila = (fraccion: number, anchoFila: number): Rect => {
     const r = { x: velo.x + (velo.ancho - anchoFila) / 2, y, ancho: anchoFila, alto: columna * fraccion };
     y += r.alto + hueco;
     return r;
   };
-  // 0,28 + 0,12 + 0,12 + 0,18 de alto, más tres huecos de 0,1: la columna entera.
-  const titulo = fila(0.28, ancho);
-  const lineas = [fila(0.12, ancho), fila(0.12, ancho)];
-  const boton = fila(0.18, Math.min(ancho, columna * 1.1));
-  return { velo, titulo, lineas, boton };
+  // 0,22 + 3 × 0,09 + 0,15 + 0,07 de alto, más cinco huecos de 0,058: la columna entera.
+  const titulo = fila(0.22, ancho);
+  const lineas = [fila(0.09, ancho), fila(0.09, ancho), fila(0.09, ancho)];
+  const boton = fila(0.15, Math.min(ancho, columna * 1.1));
+  const pista = fila(0.07, ancho);
+  return { velo, titulo, lineas, boton, pista };
 }
 
 /** Si `punto` cae dentro del botón «Otra ronda». */

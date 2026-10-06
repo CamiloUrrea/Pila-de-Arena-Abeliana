@@ -1,13 +1,14 @@
 # Cliente web (`@pila/game`)
 
-El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, los indicadores (semilla y lado, etiqueta de cadena, ritmo, medidor de desborde y tiradas); en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano y los recuentos del mazo. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Los indicadores de la ronda llegan en T3.4. Al terminar una ronda se puede jugar otra sin recargar la página (T3.5a). Todavía no hay estadísticas de sesión ni almacenamiento (T3.5b) ni sonido.
+El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, los indicadores (semilla y lado, etiqueta de cadena, ritmo, medidor de desborde y tiradas); en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano y los recuentos del mazo. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Los indicadores de la ronda llegan en T3.4. Al terminar una ronda se puede jugar otra sin recargar la página (T3.5a), con estadísticas de la sesión y un registro local de cada ronda para las pruebas con personas (T3.5b). Todavía no hay sonido.
 
 ## Arrancarlo
 
 ```sh
 pnpm --filter @pila/game dev       # servidor de desarrollo de Vite (por defecto en http://localhost:5173/)
 pnpm --filter @pila/game build     # compilación a packages/game/dist/
-pnpm --filter @pila/game preview   # sirve la compilación
+pnpm --filter @pila/game preview   # sirve la compilación (por defecto en http://localhost:4173/)
+pnpm --filter @pila/game preview --host   # igual, pero también para otros dispositivos de la red local
 ```
 
 `pnpm check`, en la raíz, incluye la compilación del cliente después de los tipos, el linter y las pruebas.
@@ -20,6 +21,7 @@ La compilación usa una base relativa (`base: './'` en `vite.config.ts`): `dist/
 | --- | --- | --- |
 | `semilla` | Entero de 0 a 4294967295, escrito solo con dígitos. | Una semilla aleatoria de 32 bits (`crypto.getRandomValues`). |
 | `lado` | Entero de 1 a 9, escrito solo con dígitos. | 3, el de `CONFIG_INICIAL`. |
+| `jugador` | De 1 a 24 caracteres entre letras (también acentuadas), cifras, espacio, guion y guion bajo; no solo espacios. | Sin jugador. |
 | `ritmo` | Uno de los ritmos permitidos: 0,25, 0,5, 0,75, 1, 1,5, 2, 3 o 4, con punto o con coma decimal (`0.5` o `0,5`). | 1. |
 
 Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4&ritmo=0.5`. Un parámetro presente pero inválido (vacío, negativo, decimal donde no se admite, fuera de rango, un ritmo que no está en la lista o no numérico) no arranca el juego: la página muestra un mensaje en español con cada error. Los parámetros desconocidos se ignoran. La ronda se crea con `crearRonda({ ...CONFIG_INICIAL, lado }, semilla)`; si el núcleo rechaza la configuración, también se muestra el error.
@@ -38,6 +40,7 @@ Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4&ritmo=0.5`. Un parámet
 | Clic o toque en «Confirmar», o `Intro` o `Espacio` | Confirma la tirada, si la mano está completa. Si no, un mensaje pide colocar todos los granos. |
 | Durante la cascada: cualquier clic o toque, `Intro` o `Espacio` | Salta al final de la animación. Lo demás no hace nada, salvo el ritmo. |
 | Con la ronda terminada: clic o toque en «Otra ronda», `Intro`, `Espacio`, `r` o `R` | Empieza una ronda nueva. |
+| `c` o `C` | Copia al portapapeles el registro local de todas las rondas guardadas, en CSV. Funciona en cualquier fase. |
 | `+` (o `=`) o `-` | Sube o baja el ritmo de la animación al siguiente valor permitido. `=` es un alias de `+`, porque en muchos teclados es la misma tecla sin Mayúsculas. Funciona en cualquier momento, también durante la cascada. |
 | Pasar el ratón por una celda | Vista previa de la colocación candidata (ver más abajo). |
 
@@ -70,10 +73,10 @@ El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre l
 
 **Aceleración progresiva.** Las cascadas largas van acelerando: la alerta y el derrumbe de la oleada `k` duran la base por `max(0,4; 0,9^(k − 1))`. La oleada 1 va a la duración base, cada oleada dura un 10 % menos que la anterior y desde la décima ninguna baja del 40 %. La adición no se acelera. El ritmo se aplica además, sobre estas duraciones.
 
-**Fin de ronda y otra ronda.** Cuando acaba la cascada de la tirada que gana o pierde la ronda, un velo sobre el tablero muestra el título («RONDA GANADA» en amarillo o «RONDA PERDIDA» en rosa), los puntos sobre la meta («P / M»), las tiradas usadas («Tiradas usadas: k de N») y el botón primario «Otra ronda (Enter)». El botón, `Intro`, `Espacio`, `r` y `R` empiezan una ronda nueva sin recargar la página:
+**Fin de ronda y otra ronda.** Cuando acaba la cascada de la tirada que gana o pierde la ronda, un velo sobre el tablero muestra el título («RONDA GANADA» en amarillo o «RONDA PERDIDA» en rosa), los puntos sobre la meta («P / M»), las tiradas usadas («Tiradas usadas: k de N»), las estadísticas de la sesión («Sesión: 2 de 3 ganadas · racha 1 · mejor racha 2»), el botón primario «Otra ronda (Enter)» y, debajo, la pista «C: copiar registro». El botón, `Intro`, `Espacio`, `r` y `R` empiezan una ronda nueva sin recargar la página:
 
 - con una semilla nueva (`semillaAleatoria`, de `crypto.getRandomValues`), el mismo lado y el mismo ritmo;
-- el contador de ronda sube (empieza en 1) y se ve en la banda superior: «Ronda N · semilla S · lado L». Dura mientras la página siga abierta; todavía no se guarda;
+- el contador de ronda sube (empieza en 1) y se ve en la banda superior: «Ronda N · X ganadas · semilla S · lado L», precedido del jugador si lo hay («Ana · Ronda N · …»). Dura mientras la página siga abierta;
 - el medidor vuelve a 0 sin animación, y se borra cualquier cascada o mensaje pendiente;
 - la URL se actualiza con `history.replaceState` y `urlConSemilla`, sin recargar: la semilla nueva sustituye a la anterior y se conservan el lado, el ritmo y los parámetros desconocidos, en su orden. Recargar la página repite la ronda en curso;
 - si la ronda no se pudiera crear, se muestra el error de configuración en la línea de información.
@@ -88,6 +91,7 @@ El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre l
 | Saltar la animación | No | Sí | No |
 | Otra ronda | No | No | Sí |
 | Ritmo | Sí | Sí | Sí |
+| Copiar el registro | Sí | Sí | Sí |
 
 `interpretarAceptar(fase)` decide qué significan `Intro` y `Espacio`: confirmar en `jugando`, saltar en `animando` y otra ronda en `fin`. Un clic durante la cascada es «saltar» esté donde esté; con la ronda terminada, solo responde el botón «Otra ronda».
 
@@ -107,6 +111,10 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 | `src/cascada.ts` | `construirCascada(celdasAntes, eventos, lado, umbral, multiplicadorPorOleada)`: los pasos de la animación de una tirada. `muestrear(cascada, tMs)`: el cuadro de un instante. `factorAceleracion`, `valorGranoFuera` y `escalaPopup`: las fórmulas de la aceleración, del valor de un grano y de la escala de los puntos flotantes. | Sí |
 | `src/ritmo.ts` | `RITMOS`, los ritmos permitidos; `siguienteRitmo(actual, direccion)` y `formatearRitmo(ritmo)`. | Sí |
 | `src/flujo.ts` | `faseDeFlujo`, `permitida` e `interpretarAceptar`: las fases del flujo y qué entrada acepta cada una. | Sí |
+| `src/registro.ts` | `RegistroRonda` y el seguimiento de la ronda en curso: `seguimientoNuevo`, `seguirConfirmacion`, `seguirDeshacer`, `cerrarRegistro`, `marcarPidioOtra`, `idSesion` y `esRegistro`. | Sí |
+| `src/sesion.ts` | `resumenSesion(registros)`: rondas, ganadas, perdidas, rachas y cuántas pidieron otra. | Sí |
+| `src/almacenamiento.ts` | `leerRegistros` y `guardarRegistros` sobre un `Almacen` inyectado (en el navegador, `localStorage`). Nunca lanzan. | Sí (con el almacén inyectado) |
+| `src/exportacion.ts` | `aCsv(registros)` y `copiarAlPortapapeles(texto, navegador)`, con el navegador inyectado. | Sí (con el navegador inyectado) |
 | `src/rondas.ts` | `nuevaRonda({ lado, semilla })`: una ronda nueva con su estado de interfaz inicial, o el error. | Sí |
 | `src/indicadores.ts` | `proporcionMedidor`, `colorMedidor`, `puntosMostrados`, `describirIndicadores`, `fichasTiradas`, `suavizar` e `intensidadPulso`. | Sí |
 | `src/reproductor.ts` | `crearReproductor`, `avanzar`, `saltar`, `cuadroActual` y `terminado`: el tiempo de una cascada, inmutable. | Sí |
@@ -153,7 +161,7 @@ Mientras se anima, las celdas se dibujan con el color de su carga (aunque tengan
 
 En la banda inferior, los botones van a la derecha, apilados en el alto de la fila de fichas: Confirmar arriba y Deshacer abajo, con el mismo ancho, limitado por el de la banda y por su alto. La fila de fichas se centra en la banda y deja a la izquierda el mismo espacio libre que ocupan los botones a la derecha, para quedar centrada sin tocarlos. El radio de las fichas es el mayor que cabe con cualquier número de fichas (de 1 a 12) y cualquier ventana; la descripción va debajo. `celdaEn`, `botonConfirmarEn` y `botonDeshacerEn` usan los mismos rectángulos que se dibujan: los huecos entre celdas y lo que queda fuera del tablero no son ninguna celda. `disponerMazo(ventana)` da el texto del mazo en el hueco libre de la izquierda de la fila de fichas, del mismo ancho que los botones, así que no pisa las fichas, los botones ni la línea de información.
 
-La banda superior (`disponerIndicadores(ventana)`) tiene dos filas, con los anchos como fracciones de la banda para que todo quepa sin solaparse con cualquier ventana. Arriba: la ronda, la semilla y el lado (27 %), la etiqueta de cadena (57 %) y el ritmo (16 %). Abajo: la barra del medidor (56 %), su texto «P / M» (22 %) y las fichas de tiradas (22 %, colocadas con `disponerFichasTiradas`).
+La banda superior (`disponerIndicadores(ventana)`) tiene dos filas, con los anchos como fracciones de la banda para que todo quepa sin solaparse con cualquier ventana. Arriba: el jugador (si lo hay), la ronda, las ganadas, la semilla y el lado (27 %), la etiqueta de cadena (57 %) y el ritmo (16 %). Abajo: la barra del medidor (56 %), su texto «P / M» (22 %) y las fichas de tiradas (22 %, colocadas con `disponerFichasTiradas`).
 
 **Celdas.** Cada celda es un rectángulo redondeado con un color según su carga (0 a 3; una carga mayor pero estable usa el de 3). Una celda con `umbral` granos o más se marca como inestable y usa su propio color. Fuera de una animación no debería verse ninguna, porque el núcleo siempre deja la rejilla estable.
 
@@ -210,7 +218,7 @@ Todo el aspecto vive en `src/tema.ts`, en el objeto `TEMA`:
 - **`animacion.popups`:** relleno amarillo `#FFE600` y contorno oscuro `#0A0420` de los puntos flotantes, tamaño del texto relativo a la celda (0,3), distancia al borde (0,3 celdas), ascenso (0,5 celdas), tramo final en que se desvanecen (0,4) y crecimiento por oleada (0,15) con su tope (2).
 - **`bandaSuperior`:** tamaño y colores de la etiqueta de cadena (`#F5F0FF`, con el multiplicador en `#FFE600`) y tamaño y color del texto de ritmo (`#B8AEE0`), relativos al alto de su rectángulo.
 - **`indicadores`:** margen de la banda superior; el medidor (barra `#22144D`, relleno por tramos `#00E5FF`, `#FFE600` y `#FF2E93`, texto `#F5F0FF` y constante del suavizado, 180 ms); las fichas de tiradas (llenas `#F5F0FF`, vacías con contorno `#6F6596`); el texto del mazo (`#B8AEE0`); y el contorno de celda cargada (`#F5F0FF`, la mitad del hueco entre celdas, opacidad de 0,5 a 1 con un período de 1200 ms).
-- **`finDeRonda`:** el velo (`#0A0420` con opacidad 0,92), el color del título (ganada `#FFE600`, perdida `#FF2E93`) y el del texto del resultado (`#F5F0FF`). El botón «Otra ronda» usa `botonPrimario`. Su disposición la da `disponerFinDeRonda(ventana)`: el velo cubre la banda central y, dentro, una columna centrada con el título, las dos líneas y el botón, escalada con el menor de los lados.
+- **`finDeRonda`:** el velo (`#0A0420` con opacidad 0,92), el color del título (ganada `#FFE600`, perdida `#FF2E93`) y el del texto del resultado (`#F5F0FF`). El botón «Otra ronda» usa `botonPrimario`. Las estadísticas de la sesión y la pista de copiar usan el texto secundario (`#B8AEE0`). Su disposición la da `disponerFinDeRonda(ventana)`: el velo cubre la banda central y, dentro, una columna centrada con el título, las tres líneas (puntos, tiradas y sesión), el botón y la pista, escalada con el menor de los lados.
 
 Los ritmos permitidos están en `RITMOS`, en `src/ritmo.ts`.
 - **`bandas`:** el reparto vertical. `BANDAS_INICIALES` reserva el 12 % para los indicadores, el 63 % para el tablero y el 25 % para la mano.
@@ -237,7 +245,49 @@ Los colores son provisionales: el arte definitivo sustituirá el tema sin tocar 
 - la etiqueta de cadena (y su multiplicador resaltado) contra el fondo: al menos 7; el texto de ritmo: al menos 4,5;
 - cada relleno del medidor contra la barra: al menos 3; la barra contra el fondo: al menos 1,2; los textos del medidor y del mazo contra el fondo: al menos 4,5; las fichas de tiradas contra el fondo: al menos 3;
 - el contorno de celda cargada contra la celda de carga 3 y contra el fondo: al menos 3; y, en el punto más tenue del pulso, mezclado sobre el fondo donde se dibuja, también 3;
-- en el fin de ronda, contra el velo mezclado sobre el fondo y sobre cada color de celda (peor caso): los títulos de ganada y perdida y el texto del resultado, al menos 4,5; el botón «Otra ronda», al menos 3, y su texto sobre el botón, al menos 4,5.
+- en el fin de ronda, contra el velo mezclado sobre el fondo y sobre cada color de celda (peor caso): los títulos de ganada y perdida, el texto del resultado y el secundario (estadísticas y pista), al menos 4,5; el botón «Otra ronda», al menos 3, y su texto sobre el botón, al menos 4,5.
+
+## Registro local y pruebas con personas
+
+Para medir las pruebas con personas (la puerta de H3: 10 rondas seguidas sin bonus y al menos 2 personas más que pidan otra ronda), el cliente guarda un registro de cada ronda terminada. **Es solo local:** se guarda en el `localStorage` de este navegador y nunca sale del dispositivo. No hay red, servidores ni analítica; lo único que se guarda es este registro.
+
+**Campos de cada ronda** (`RegistroRonda`, versión 1), en el orden de las columnas del CSV:
+
+| Campo | Qué es |
+| --- | --- |
+| `version` | Versión del formato del registro (1). |
+| `sesion` | Identificador de la sesión: 8 caracteres hexadecimales aleatorios (`crypto.getRandomValues`) generados al cargar la página. |
+| `jugador` | La etiqueta de `?jugador=`, o vacío. |
+| `indice` | Número de la ronda en la sesión, desde 1. |
+| `semilla`, `lado` | Los de la ronda: con ellos y las mismas jugadas se reproduce. |
+| `resultado` | `ganada` o `perdida`. |
+| `puntos`, `meta` | En centésimas, del estado final. |
+| `tiradasUsadas`, `tiradasTotales` | Confirmaciones hechas y tiradas de la ronda. |
+| `oleadasMax` | La mayor cantidad de oleadas en una sola tirada. |
+| `avalanchaMax` | El mayor número de derrumbes en una sola tirada (sumando todas sus oleadas). |
+| `deshacer` | Cuántas veces se usó Deshacer, también desde una ficha. |
+| `duracionMs` | Desde que empieza la ronda hasta que se llega al fin de ronda (tras la última cascada). |
+| `pidioOtra` | `true` si, al terminar, el jugador pidió otra ronda (botón, `Intro`, `Espacio` o `R`). La última ronda de cada sesión queda en `false` porque el jugador se fue. |
+| `fecha` | Fecha del cierre, en ISO 8601. |
+
+Al llegar al fin de ronda se cierra su registro (`cerrarRegistro`, con `pidioOtra` en `false`), se añade a la lista y se guarda. Al empezar otra ronda desde el fin de ronda, el último registro se marca con `pidioOtra` (`marcarPidioOtra`) y se vuelve a guardar. Las estadísticas en pantalla (`resumenSesion`) solo cuentan los registros de la sesión actual; el CSV incluye todos los guardados.
+
+**Almacenamiento.** Un objeto `{ version: 1, registros: [...] }` bajo la clave única `pila-arena-abeliana:registro`, con los 2000 registros más recientes como mucho. `leerRegistros` y `guardarRegistros` nunca lanzan: un JSON ilegible, una versión o estructura incorrectas o un almacén bloqueado dan un error tipado. Los registros mal formados se descartan al leer sin perder los buenos. Si lo guardado no se puede leer, la sesión sigue sin guardar (para no sobrescribir esos datos) y la línea de información lo avisa una sola vez; las estadísticas en pantalla siguen funcionando.
+
+**Etiquetar al jugador.** Añade `?jugador=Ana` a la URL (por ejemplo `http://localhost:4173/?jugador=Ana`). La etiqueta se conserva al pasar de ronda.
+
+**Copiar el registro.** Pulsa `C` en cualquier momento: el CSV de todos los registros guardados va al portapapeles (`navigator.clipboard.writeText`) y la línea de información dice «Registro copiado: N rondas» o por qué no se pudo. El CSV tiene una cabecera, una fila por ronda, números sin formato regional, `true` y `false`, y los textos con comas, comillas o saltos de línea entre comillas (RFC 4180, líneas CRLF). Se puede pegar en una hoja de cálculo. En algunos navegadores el portapapeles solo funciona con `https` o en `localhost`.
+
+**Borrar los datos.** Desde las herramientas del navegador (consola de la página): `localStorage.removeItem('pila-arena-abeliana:registro')`. También se borran al borrar los datos del sitio.
+
+**Servir el juego para las pruebas.**
+
+```sh
+pnpm --filter @pila/game build
+pnpm --filter @pila/game preview --host
+```
+
+`preview --host` sirve `dist/` y muestra las direcciones de la red local («Network: http://192.168.…:4173/»): ábrela desde otro dispositivo de la misma red. Con pnpm, `--host` va directamente detrás de `preview`. Con `preview -- --host`, pnpm pasa el `--` literal a Vite, que ignora `--host` y solo sirve en `localhost`. Abrir `dist/index.html` con doble clic (`file://`) no funciona, porque el navegador no carga módulos desde archivos: hay que servirlo. Cada dispositivo guarda su propio registro; para reunirlos, copia el CSV en cada uno.
 
 ## Reglas de importación
 

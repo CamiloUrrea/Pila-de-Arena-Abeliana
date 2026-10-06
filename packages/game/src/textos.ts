@@ -2,7 +2,11 @@
 // (`DEFINICIONES_GRANOS`), de modo que un tipo nuevo tiene texto sin tocar este módulo.
 import { DEFINICIONES_GRANOS } from '@pila/core';
 import type { DefinicionGrano, Estado, MotivoIlegal, TipoGrano } from '@pila/core';
+import type { ErrorAlmacen } from './almacenamiento.ts';
 import type { ErrorCascada } from './cascada.ts';
+import type { ErrorExportacion } from './exportacion.ts';
+import type { ErrorParametro } from './parametros.ts';
+import type { ResumenSesion } from './sesion.ts';
 import type { ErrorControlador } from './controlador.ts';
 import type { Indicadores } from './indicadores.ts';
 
@@ -12,8 +16,12 @@ export const TEXTOS = {
   manoCompleta: 'Mano completa: confirma la tirada',
   resolviendo: 'Resolviendo…',
   otraRonda: 'Otra ronda (Enter)',
-  informacion: (ronda: number, semilla: number, lado: number): string =>
-    `${describirContadorRonda(ronda)} · semilla ${semilla} · lado ${lado}`,
+  /** «Ronda N · X ganadas · semilla S · lado L», precedido del jugador si lo hay. */
+  informacion: (ronda: number, ganadas: number, semilla: number, lado: number, jugador: string | null = null): string =>
+    `${jugador === null ? '' : `${jugador} · `}${describirContadorRonda(ronda)} · ${ganadas} ${ganadas === 1 ? 'ganada' : 'ganadas'} · semilla ${semilla} · lado ${lado}`,
+  pistaCopiar: 'C: copiar registro',
+  registroCopiado: (rondas: number): string => `Registro copiado: ${rondas} ${rondas === 1 ? 'ronda' : 'rondas'}`,
+  copiaFallida: (motivo: string): string => `No se pudo copiar el registro: ${motivo}`,
   /** Partes de la etiqueta de cadena «Oleada k · ×m · +P»; el multiplicador va aparte para resaltarlo. */
   oleada: (k: number): string => `Oleada ${k} · `,
   puntosDeTirada: (puntos: string): string => ` · +${puntos}`,
@@ -130,7 +138,9 @@ const MOTIVOS: Readonly<Record<MotivoIlegal, string>> = {
  * Mensaje en español para cada error del controlador, del núcleo y de la cascada. Es exhaustiva: si aparece un tipo
  * de error nuevo, el `switch` deja de compilar hasta que tenga su mensaje.
  */
-export function describirError(error: ErrorControlador | ErrorCascada): string {
+export function describirError(
+  error: ErrorControlador | ErrorCascada | ErrorAlmacen | ErrorExportacion | ErrorParametro,
+): string {
   switch (error.tipo) {
     case 'SinGranoSeleccionado':
       return 'No hay ningún grano seleccionado: todos los granos de la mano están colocados.';
@@ -146,6 +156,20 @@ export function describirError(error: ErrorControlador | ErrorCascada): string {
       return `Error interno: la tirada no terminó en ${error.topeOleadas} oleadas.`;
     case 'CascadaInvalida':
       return `Error interno: no se pudo animar la tirada (${error.motivo}).`;
+    case 'AlmacenNoDisponible':
+      return 'El registro local no está disponible en este navegador: las rondas no se guardarán.';
+    case 'RegistroIlegible':
+      return 'El registro local guardado no se puede leer: se empieza uno nuevo.';
+    case 'VersionDesconocida':
+      return `El registro local guardado es de otra versión (${error.version}): se empieza uno nuevo.`;
+    case 'EstructuraInvalida':
+      return 'El registro local guardado no tiene el formato esperado: se empieza uno nuevo.';
+    case 'SinPortapapeles':
+      return 'Este navegador no permite copiar al portapapeles.';
+    case 'CopiaFallida':
+      return `El navegador no dejó copiar al portapapeles (${error.detalle}).`;
+    case 'ParametroInvalido':
+      return error.mensaje;
     default: {
       const desconocido: never = error;
       return `Error desconocido: ${JSON.stringify(desconocido)}`;
@@ -208,4 +232,9 @@ export function describirMazo(mazo: Indicadores['mazo']): string {
 /** «Tiradas 3/5»: las restantes sobre el total. */
 export function describirTiradas({ total, restantes }: Indicadores['tiradas']): string {
   return `Tiradas ${restantes}/${total}`;
+}
+
+/** «Sesión: 2 de 3 ganadas · racha 1 · mejor racha 2». */
+export function describirSesion(resumen: ResumenSesion): string {
+  return `Sesión: ${resumen.ganadas} de ${resumen.rondas} ganadas · racha ${resumen.rachaActual} · mejor racha ${resumen.mejorRacha}`;
 }

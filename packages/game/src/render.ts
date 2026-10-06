@@ -2,7 +2,7 @@
 // la cascada, y traduce clics, toques y teclas a llamadas al controlador puro. No decide nada del juego.
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import type { FederatedPointerEvent, Ticker } from 'pixi.js';
-import type { Estado, Resultado } from '@pila/core';
+import type { Estado, Evento, Resultado } from '@pila/core';
 import { construirCascada } from './cascada.ts';
 import type { Cuadro, Etiqueta, Popup } from './cascada.ts';
 import {
@@ -64,18 +64,41 @@ import type { CeldaDescrita } from './vista.ts';
 /** Una ronda para mostrar: su estado de interfaz inicial, su semilla y su número en la sesión (desde 1). */
 export type Ronda = { readonly ui: EstadoInterfaz; readonly semilla: number; readonly numero: number };
 
+/** Lo que la escena muestra de la sesión: lo da quien lleva el registro. */
+export type InfoSesion = {
+  readonly jugador: string | null;
+  /** Rondas ganadas en la sesión, para la banda superior. */
+  readonly ganadas: number;
+  /** Línea de estadísticas para el fin de ronda («Sesión: 2 de 3 ganadas · …»). */
+  readonly linea: string;
+};
+
 export type Escena = {
   /** Empieza a mostrar una ronda: borra cualquier cascada o mensaje pendiente y pone el medidor sin animación. */
   readonly mostrarRonda: (ronda: Ronda) => void;
-  /** Muestra un mensaje de error en la línea de información. */
-  readonly mostrarMensaje: (texto: string) => void;
+  /** Muestra un mensaje en la línea de información hasta la siguiente acción; `error` lo pinta como error. */
+  readonly mostrarMensaje: (texto: string, error?: boolean) => void;
+  /** Actualiza lo que se muestra de la sesión (jugador, ganadas y estadísticas del fin de ronda). */
+  readonly fijarSesion: (info: InfoSesion) => void;
 };
 
+/**
+ * Opciones de la escena. Los avisos (`al…`) permiten a quien la crea llevar el registro de la ronda sin que la escena
+ * sepa nada de él.
+ */
 export type OpcionesEscena = {
   /** Ritmo inicial de la animación; las teclas `+` y `-` lo cambian. */
   readonly ritmo?: number;
   /** Se llama cuando el jugador pide otra ronda en la fase de fin; quien crea la escena crea la ronda. */
   readonly alPedirOtraRonda: () => void;
+  /** Se llama con los eventos de cada `Confirmar` aceptado. */
+  readonly alConfirmar?: (eventos: readonly Evento[]) => void;
+  /** Se llama con cada Deshacer aceptado, también el de una ficha. */
+  readonly alDeshacer?: () => void;
+  /** Se llama una vez por ronda, con el estado final, cuando se llega al fin de ronda (tras su última cascada). */
+  readonly alFinDeRonda?: (estado: Estado) => void;
+  /** Se llama al pedir copiar el registro (tecla C). */
+  readonly alCopiar?: () => void;
 };
 
 /** Cascada en curso: el reproductor y el estado de interfaz que se muestra al terminar. */
@@ -125,6 +148,11 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
   let celdaRaton: Punto | null = null;
   /** Mensaje de la última acción imposible; se borra con la siguiente acción. */
   let mensaje: string | null = null;
+  /** Si el mensaje es un error (rojo claro) o un aviso (color normal). */
+  let mensajeEsError = true;
+  let sesion: InfoSesion = { jugador: null, ganadas: 0, linea: '' };
+  /** Si ya se avisó del fin de la ronda en curso. */
+  let finAvisado = false;
   /** Cascada que se está reproduciendo; mientras exista, la interacción está bloqueada. */
   let animacion: Animacion | null = null;
   let ritmo = opciones.ritmo ?? RITMO_POR_DEFECTO;
@@ -169,7 +197,7 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
     const info = indicadoresActuales();
     if (ui === undefined || tablero === undefined || indicadores === undefined || info === undefined) return;
     const cuadro = animacion === null ? null : cuadroActual(animacion.rep);
-    bandaSuperior.actualizar(indicadores, numeroRonda, semilla, ui.estado.config.lado, ritmo, cuadro, info, medidor);
+    bandaSuperior.actualizar(indicadores, TEXTOS.informacion(numeroRonda, sesion.ganadas, semilla, ui.estado.config.lado, sesion.jugador), ritmo, cuadro, info, medidor);
     if (cuadro === null) {
       mostrarPopups([], tablero);
       return;
@@ -211,14 +239,14 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
     capaMano.addChild(
       dibujarMano(mano, ui, {
         linea,
-        error: mensaje !== null,
+        error: mensaje !== null && mensajeEsError,
         bloqueada: !jugando,
         confirmar: manoCompleta(estado),
         deshacer: estado.ordenColocacion.length > 0,
       }),
     );
     const resultado = describirFinDeRonda(estado);
-    if (resultado !== null) capaFin.addChild(dibujarFinDeRonda(fin, resultado, estado.fase === 'ganada'));
+    if (resultado !== null) capaFin.addChild(dibujarFinDeRonda(fin, resultado, sesion.linea, estado.fase === 'ganada'));
     dibujarCuadroActual();
   };
 
@@ -229,8 +257,22 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
       mensaje = null;
     } else {
       mensaje = describirError(paso.error);
+      mensajeEsError = true;
     }
     dibujar();
+  };
+
+  /** Como `ejecutar`, avisando de cada Deshacer aceptado. */
+  const ejecutarDeshacer = (paso: Resultado<PasoInterfaz, ErrorControlador>): void => {
+    if (paso.ok) opciones.alDeshacer?.();
+    ejecutar(paso);
+  };
+
+  /** Avisa una sola vez por ronda de que se llegó al fin, antes de dibujarlo, para que las estadísticas ya cuenten. */
+  const avisarSiTermino = (): void => {
+    if (ui === undefined || finAvisado || fase() !== 'fin') return;
+    finAvisado = true;
+    opciones.alFinDeRonda?.(ui.estado);
   };
 
   /** Termina la cascada en curso y muestra el estado nuevo, con la mano nueva y sin vista previa. */
@@ -240,6 +282,7 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
     animacion = null;
     celdaRaton = null;
     mensaje = null;
+    avisarSiTermino();
     dibujar();
   };
 
@@ -251,12 +294,15 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
       return;
     }
     const { estadoAntes, eventos } = paso.valor;
+    opciones.alConfirmar?.(eventos);
     const { lado, umbral, multiplicadorPorOleada } = estadoAntes.config;
     const cascada = construirCascada(estadoAntes.celdas, eventos, lado, umbral, multiplicadorPorOleada);
     if (!cascada.ok) {
       // La tirada ya está resuelta en el núcleo: se muestra el estado nuevo sin animación y se avisa del fallo.
       ui = paso.valor.ui;
       mensaje = describirError(cascada.error);
+      mensajeEsError = true;
+      avisarSiTermino();
       dibujar();
       return;
     }
@@ -307,10 +353,10 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
     if (ficha !== null) {
       // Una ficha sin colocar se elige; una colocada se deshace si es la última (si no, el error explica por qué).
       if (ui.estado.mano[ficha]?.celda === null) return ['seleccionar', (u) => ejecutar(seleccionar(u, ficha))];
-      return ['deshacer', (u) => ejecutar(deshacerDesdeFicha(u, ficha))];
+      return ['deshacer', (u) => ejecutarDeshacer(deshacerDesdeFicha(u, ficha))];
     }
     if (mano !== undefined && botonConfirmarEn(p, mano)) return ['confirmar', intentarConfirmar];
-    if (mano !== undefined && botonDeshacerEn(p, mano)) return ['deshacer', (u) => ejecutar(deshacer(u))];
+    if (mano !== undefined && botonDeshacerEn(p, mano)) return ['deshacer', (u) => ejecutarDeshacer(deshacer(u))];
     return null;
   };
 
@@ -363,7 +409,7 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
       case 'ciclar':
         return ['ciclar', (u) => ejecutar(ciclar(u, accion.direccion))];
       case 'deshacer':
-        return ['deshacer', (u) => ejecutar(deshacer(u))];
+        return ['deshacer', (u) => ejecutarDeshacer(deshacer(u))];
       case 'ritmo':
         return [
           'ritmo',
@@ -374,6 +420,8 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
         ];
       case 'otraRonda':
         return ['otraRonda', opciones.alPedirOtraRonda];
+      case 'copiar':
+        return ['copiar', () => opciones.alCopiar?.()];
       case 'aceptar': {
         const significado = interpretarAceptar(f);
         if (significado === 'saltar') return ['saltar', saltarAnimacion];
@@ -401,12 +449,18 @@ export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEsc
       animacion = null;
       mensaje = null;
       celdaRaton = null;
+      finAvisado = false;
       // El medidor arranca en los puntos de la ronda (0 en una nueva), sin animación.
       medidor = ronda.ui.estado.puntos;
       dibujar();
     },
-    mostrarMensaje: (texto) => {
+    mostrarMensaje: (texto, error = true) => {
       mensaje = texto;
+      mensajeEsError = error;
+      dibujar();
+    },
+    fijarSesion: (info) => {
+      sesion = info;
       dibujar();
     },
   };
@@ -454,9 +508,7 @@ function crearBandaSuperior() {
 
   const actualizar = (
     d: DisposicionIndicadores,
-    ronda: number,
-    semilla: number,
-    lado: number,
+    textoInformacion: string,
     valorRitmo: number,
     cuadro: Cuadro | null,
     info: Indicadores,
@@ -464,7 +516,7 @@ function crearBandaSuperior() {
   ): void => {
     const centro = (r: Rect): number => r.y + r.alto / 2;
 
-    encajar(informacion, TEXTOS.informacion(ronda, semilla, lado), d.semilla, 0.62);
+    encajar(informacion, textoInformacion, d.semilla, 0.62);
     informacion.position.set(d.semilla.x, centro(d.semilla));
     encajar(ritmo, TEXTOS.ritmo(formatearRitmo(valorRitmo)), d.ritmo, estilo.ritmo.tamano);
     ritmo.position.set(d.ritmo.x + d.ritmo.ancho, centro(d.ritmo));
@@ -817,7 +869,7 @@ function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz, opciones: OpcionesM
  * Fin de ronda: un velo sobre el tablero con el título (en el color de ganada o de perdida), las líneas del resultado
  * y el botón primario «Otra ronda».
  */
-function dibujarFinDeRonda(d: DisposicionFinDeRonda, textos: TextosFinDeRonda, ganada: boolean): Container {
+function dibujarFinDeRonda(d: DisposicionFinDeRonda, textos: TextosFinDeRonda, lineaSesion: string, ganada: boolean): Container {
   const { tipografia, finDeRonda, botonPrimario } = TEMA;
   const contenedor = new Container();
   const v = d.velo;
@@ -834,9 +886,11 @@ function dibujarFinDeRonda(d: DisposicionFinDeRonda, textos: TextosFinDeRonda, g
     contenedor.addChild(t);
   };
   linea(textos.titulo, d.titulo, ganada ? finDeRonda.titulo.ganada : finDeRonda.titulo.perdida, 'bold', 0.85);
-  const [puntos, tiradas] = d.lineas;
+  const [puntos, tiradas, estadisticas] = d.lineas;
   if (puntos !== undefined) linea(textos.puntos, puntos, finDeRonda.texto, 'bold', 0.8);
   if (tiradas !== undefined) linea(textos.tiradas, tiradas, finDeRonda.texto, 'normal', 0.8);
+  if (estadisticas !== undefined && lineaSesion !== '') linea(lineaSesion, estadisticas, finDeRonda.secundario, 'normal', 0.8);
   contenedor.addChild(dibujarBoton(d.boton, textos.boton, botonPrimario.activo));
+  linea(TEXTOS.pistaCopiar, d.pista, finDeRonda.secundario, 'normal', 0.85);
   return contenedor;
 }

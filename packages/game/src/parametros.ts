@@ -10,11 +10,23 @@ export const LADO_MINIMO = 1;
 export const LADO_MAXIMO = 9;
 export const SEMILLA_MAXIMA = 0xffffffff;
 
-/** Parámetros de la URL; `ritmo` es el de la animación de la cascada, uno de `RITMOS`. */
-export type Parametros = { readonly semilla: number; readonly lado: number; readonly ritmo: number };
+/**
+ * Parámetros de la URL; `ritmo` es el de la animación de la cascada, uno de `RITMOS`, y `jugador` la etiqueta para
+ * el registro local, o `null`.
+ */
+export type Parametros = {
+  readonly semilla: number;
+  readonly lado: number;
+  readonly ritmo: number;
+  readonly jugador: string | null;
+};
+
+/** Longitud máxima de la etiqueta del jugador, en caracteres. */
+export const JUGADOR_MAXIMO = 24;
 
 export type ErrorParametro = {
-  readonly campo: 'semilla' | 'lado' | 'ritmo';
+  readonly tipo: 'ParametroInvalido';
+  readonly campo: 'semilla' | 'lado' | 'ritmo' | 'jugador';
   /** Texto recibido en la URL, tal cual. */
   readonly recibido: string;
   /** Mensaje para el jugador, en español. */
@@ -43,10 +55,21 @@ function ritmoPermitido(texto: string): number | undefined {
 }
 
 /**
- * Lee `?semilla=<entero 0 a 4294967295>`, `?lado=<entero 1 a 9>` y `?ritmo=<uno de RITMOS>` de la parte de búsqueda
- * de la URL (con o sin `?`). Un parámetro ausente toma su valor por defecto (`generarSemilla()`, `LADO_POR_DEFECTO`
- * y `RITMO_POR_DEFECTO`); uno presente pero inválido, incluido el vacío, es un error. Los parámetros desconocidos se
- * ignoran.
+ * Etiqueta del jugador: de 1 a 24 caracteres entre letras (también acentuadas), cifras, espacio, guion y guion bajo,
+ * y no solo espacios. Se normaliza a NFC para que una letra acentuada cuente como un carácter.
+ */
+function jugadorPermitido(texto: string): string | undefined {
+  const nfc = texto.normalize('NFC');
+  const longitud = [...nfc].length;
+  if (longitud < 1 || longitud > JUGADOR_MAXIMO || nfc.trim() === '') return undefined;
+  return /^[\p{L}0-9 _-]+$/u.test(nfc) ? nfc : undefined;
+}
+
+/**
+ * Lee `?semilla=<entero 0 a 4294967295>`, `?lado=<entero 1 a 9>`, `?ritmo=<uno de RITMOS>` y `?jugador=<texto>` de la
+ * parte de búsqueda de la URL (con o sin `?`). Un parámetro ausente toma su valor por defecto (`generarSemilla()`,
+ * `LADO_POR_DEFECTO`, `RITMO_POR_DEFECTO` y sin jugador); uno presente pero inválido, incluido el vacío, es un error.
+ * Los parámetros desconocidos se ignoran.
  */
 export function leerParametros(busqueda: string, generarSemilla: () => number): ResultadoParametros {
   const url = new URLSearchParams(busqueda);
@@ -58,6 +81,7 @@ export function leerParametros(busqueda: string, generarSemilla: () => number): 
     const valor = enteroEnRango(textoLado, LADO_MINIMO, LADO_MAXIMO);
     if (valor === undefined) {
       errores.push({
+        tipo: 'ParametroInvalido',
         campo: 'lado',
         recibido: textoLado,
         mensaje: `El lado debe ser un número entero de ${LADO_MINIMO} a ${LADO_MAXIMO}; se recibió «${textoLado}».`,
@@ -73,6 +97,7 @@ export function leerParametros(busqueda: string, generarSemilla: () => number): 
     semilla = enteroEnRango(textoSemilla, 0, SEMILLA_MAXIMA);
     if (semilla === undefined) {
       errores.push({
+        tipo: 'ParametroInvalido',
         campo: 'semilla',
         recibido: textoSemilla,
         mensaje: `La semilla debe ser un número entero de 0 a ${SEMILLA_MAXIMA}; se recibió «${textoSemilla}».`,
@@ -87,6 +112,7 @@ export function leerParametros(busqueda: string, generarSemilla: () => number): 
     if (valor === undefined) {
       const permitidos = RITMOS.map((r) => formatearPuntos(Math.round(r * 100))).join('; ');
       errores.push({
+        tipo: 'ParametroInvalido',
         campo: 'ritmo',
         recibido: textoRitmo,
         mensaje: `El ritmo debe ser uno de estos valores: ${permitidos}; se recibió «${textoRitmo}».`,
@@ -96,8 +122,24 @@ export function leerParametros(busqueda: string, generarSemilla: () => number): 
     }
   }
 
+  const textoJugador = url.get('jugador');
+  let jugador: string | null = null;
+  if (textoJugador !== null) {
+    const valor = jugadorPermitido(textoJugador);
+    if (valor === undefined) {
+      errores.push({
+        tipo: 'ParametroInvalido',
+        campo: 'jugador',
+        recibido: textoJugador,
+        mensaje: `El jugador debe tener de 1 a ${JUGADOR_MAXIMO} caracteres entre letras, cifras, espacio, guion y guion bajo; se recibió «${textoJugador}».`,
+      });
+    } else {
+      jugador = valor;
+    }
+  }
+
   if (errores.length > 0) return { ok: false, errores };
-  return { ok: true, valor: { semilla: semilla ?? generarSemilla(), lado, ritmo } };
+  return { ok: true, valor: { semilla: semilla ?? generarSemilla(), lado, ritmo, jugador } };
 }
 
 /** Semilla aleatoria de 32 bits del generador criptográfico (`crypto.getRandomValues`), para inyectarla. */
@@ -107,7 +149,7 @@ export function semillaAleatoria(): number {
 
 /**
  * Cadena de consulta (con `?`) con `semilla` sustituida, o añadida al final si no había, conservando los demás
- * parámetros (`lado`, `ritmo` y los desconocidos) en su orden y sin duplicar `semilla`. Los valores se escapan con
+ * parámetros (`lado`, `ritmo`, `jugador` y los desconocidos) en su orden y sin duplicar `semilla`. Los valores se escapan con
  * `URLSearchParams`. Con una semilla que no es un entero de 0 a 4294967295 devuelve la consulta sin cambiarla.
  */
 export function urlConSemilla(busqueda: string, semilla: number): string {

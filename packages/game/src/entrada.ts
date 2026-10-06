@@ -7,7 +7,8 @@ export type AccionTecla =
   | { readonly tipo: 'deshacer' }
   | { readonly tipo: 'aceptar' }
   | { readonly tipo: 'ritmo'; readonly direccion: 1 | -1 }
-  | { readonly tipo: 'otraRonda' };
+  | { readonly tipo: 'otraRonda' }
+  | { readonly tipo: 'copiar' };
 
 /** Lo que importa de una pulsación: la tecla (`KeyboardEvent.key`) y los modificadores. */
 export type Pulsacion = { readonly tecla: string; readonly ctrl: boolean; readonly alt: boolean; readonly meta: boolean };
@@ -15,7 +16,7 @@ export type Pulsacion = { readonly tecla: string; readonly ctrl: boolean; readon
 /**
  * Teclas `1` a `9`: seleccionar el grano de índice número − 1. Flechas izquierda y derecha: ciclar −1 y +1.
  * `z`, `Z` y Retroceso: deshacer. Intro y Espacio: aceptar (confirmar, o saltar la animación). `+` (o `=`, la misma
- * tecla sin Mayúsculas en muchos teclados) y `-`: subir y bajar el ritmo. `r` y `R`: otra ronda. Cualquier otra tecla, o con Ctrl, Alt o Meta pulsado (atajos del sistema y del navegador): `null`.
+ * tecla sin Mayúsculas en muchos teclados) y `-`: subir y bajar el ritmo. `r` y `R`: otra ronda. `c` y `C`: copiar el registro. Cualquier otra tecla, o con Ctrl, Alt o Meta pulsado (atajos del sistema y del navegador): `null`.
  * Mayúsculas no cuenta como modificador, para que `Z` y `+` (con Mayúsculas en muchos teclados) funcionen.
  */
 export function accionDeTecla({ tecla, ctrl, alt, meta }: Pulsacion): AccionTecla | null {
@@ -41,6 +42,9 @@ export function accionDeTecla({ tecla, ctrl, alt, meta }: Pulsacion): AccionTecl
     case 'r':
     case 'R':
       return { tipo: 'otraRonda' };
+    case 'c':
+    case 'C':
+      return { tipo: 'copiar' };
     default:
       return null;
   }

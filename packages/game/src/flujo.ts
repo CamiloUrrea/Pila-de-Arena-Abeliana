@@ -14,7 +14,8 @@ export type AccionFlujo =
   | 'confirmar'
   | 'ritmo'
   | 'saltar'
-  | 'otraRonda';
+  | 'otraRonda'
+  | 'copiar';
 
 /** `animando` si hay una cascada en curso; si no, `fin` cuando la ronda ya no está en `colocando`; si no, `jugando`. */
 export function faseDeFlujo({ animando, estado }: { readonly animando: boolean; readonly estado: Estado }): FaseFlujo {
@@ -22,11 +23,11 @@ export function faseDeFlujo({ animando, estado }: { readonly animando: boolean; 
   return estado.fase === 'colocando' ? 'jugando' : 'fin';
 }
 
-/** Acciones aceptadas en cada fase; el ritmo se puede cambiar siempre. */
+/** Acciones aceptadas en cada fase; el ritmo y copiar el registro se pueden usar siempre. */
 const PERMITIDAS: Readonly<Record<FaseFlujo, ReadonlySet<AccionFlujo>>> = {
-  jugando: new Set<AccionFlujo>(['seleccionar', 'ciclar', 'colocar', 'deshacer', 'confirmar', 'ritmo']),
-  animando: new Set<AccionFlujo>(['saltar', 'ritmo']),
-  fin: new Set<AccionFlujo>(['otraRonda', 'ritmo']),
+  jugando: new Set<AccionFlujo>(['seleccionar', 'ciclar', 'colocar', 'deshacer', 'confirmar', 'ritmo', 'copiar']),
+  animando: new Set<AccionFlujo>(['saltar', 'ritmo', 'copiar']),
+  fin: new Set<AccionFlujo>(['otraRonda', 'ritmo', 'copiar']),
 };
 
 /** Si la acción se acepta en la fase. Cualquier combinación que no esté en la tabla se rechaza. */

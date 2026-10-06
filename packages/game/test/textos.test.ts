@@ -3,7 +3,10 @@ import fc from 'fast-check';
 import { DEFINICIONES_GRANOS } from '@pila/core';
 import { CONFIG_INICIAL, crearRonda } from '@pila/core';
 import type { Estado, MotivoIlegal } from '@pila/core';
+import type { ErrorAlmacen } from '../src/almacenamiento.ts';
 import type { ErrorCascada } from '../src/cascada.ts';
+import type { ErrorExportacion } from '../src/exportacion.ts';
+import type { ErrorParametro } from '../src/parametros.ts';
 import type { ErrorControlador } from '../src/controlador.ts';
 import {
   TEXTOS,
@@ -13,6 +16,7 @@ import {
   describirFinDeRonda,
   describirGrano,
   describirMazo,
+  describirSesion,
   describirTiradas,
   formatearPuntos,
   lineasMazo,
@@ -94,12 +98,17 @@ describe('describirGrano', () => {
     expect(TEXTOS.confirmar).toBe('Confirmar');
     expect(TEXTOS.resolviendo).toBe('Resolviendo…');
     expect(TEXTOS.otraRonda).toBe('Otra ronda (Enter)');
-    expect(TEXTOS.informacion(1, 42, 3)).toBe('Ronda 1 · semilla 42 · lado 3');
-    expect(TEXTOS.informacion(7, 4294967295, 9)).toBe('Ronda 7 · semilla 4294967295 · lado 9');
+    expect(TEXTOS.informacion(1, 0, 42, 3)).toBe('Ronda 1 · 0 ganadas · semilla 42 · lado 3');
+    expect(TEXTOS.informacion(2, 1, 42, 3)).toBe('Ronda 2 · 1 ganada · semilla 42 · lado 3');
+    expect(TEXTOS.informacion(7, 4, 4294967295, 9, 'Ana')).toBe('Ana · Ronda 7 · 4 ganadas · semilla 4294967295 · lado 9');
+    expect(TEXTOS.pistaCopiar).toBe('C: copiar registro');
+    expect(TEXTOS.registroCopiado(3)).toBe('Registro copiado: 3 rondas');
+    expect(TEXTOS.registroCopiado(1)).toBe('Registro copiado: 1 ronda');
+    expect(TEXTOS.copiaFallida('sin permiso')).toBe('No se pudo copiar el registro: sin permiso');
   });
 });
 
-type ErrorPosible = ErrorControlador | ErrorCascada;
+type ErrorPosible = ErrorControlador | ErrorCascada | ErrorAlmacen | ErrorExportacion | ErrorParametro;
 
 /** Clave de cada error posible: su tipo o, para `AccionIlegal`, su motivo. */
 type ClaveError = Exclude<ErrorPosible['tipo'], 'AccionIlegal'> | MotivoIlegal;
@@ -117,6 +126,13 @@ const ERRORES: Readonly<Record<ClaveError, ErrorPosible>> = {
   GranoNoColocado: { tipo: 'GranoNoColocado', indice: 2 },
   ResolucionNoTermino: { tipo: 'ResolucionNoTermino', topeOleadas: 1000 },
   CascadaInvalida: { tipo: 'CascadaInvalida', motivo: 'Derrumbe de (1, 1), que no está en OleadaIniciada 1' },
+  AlmacenNoDisponible: { tipo: 'AlmacenNoDisponible', detalle: 'QuotaExceededError' },
+  RegistroIlegible: { tipo: 'RegistroIlegible', detalle: 'Unexpected token' },
+  VersionDesconocida: { tipo: 'VersionDesconocida', version: '7' },
+  EstructuraInvalida: { tipo: 'EstructuraInvalida' },
+  SinPortapapeles: { tipo: 'SinPortapapeles' },
+  CopiaFallida: { tipo: 'CopiaFallida', detalle: 'NotAllowedError' },
+  ParametroInvalido: { tipo: 'ParametroInvalido', campo: 'jugador', recibido: 'a,b', mensaje: 'El jugador debe tener de 1 a 24 caracteres.' },
   FaseIncorrecta: ilegal('FaseIncorrecta'),
   IndiceManoInvalido: ilegal('IndiceManoInvalido'),
   GranoYaColocado: ilegal('GranoYaColocado'),
@@ -233,5 +249,22 @@ describe('describirMazo y describirTiradas', () => {
     [1, 1, 'Tiradas 1/1'],
   ])('tiradas %i con %i restantes: «%s»', (total, restantes, texto) => {
     expect(describirTiradas({ total, restantes })).toBe(texto);
+  });
+});
+
+describe('estadísticas de la sesión', () => {
+  it('«Sesión: G de R ganadas · racha A · mejor racha M»', () => {
+    expect(describirSesion({ rondas: 3, ganadas: 2, perdidas: 1, rachaActual: 1, mejorRacha: 2, pidioOtra: 2 })).toBe(
+      'Sesión: 2 de 3 ganadas · racha 1 · mejor racha 2',
+    );
+    expect(describirSesion({ rondas: 0, ganadas: 0, perdidas: 0, rachaActual: 0, mejorRacha: 0, pidioOtra: 0 })).toBe(
+      'Sesión: 0 de 0 ganadas · racha 0 · mejor racha 0',
+    );
+  });
+
+  it('los errores nuevos tienen su mensaje; el de un parámetro es el suyo', () => {
+    expect(describirError(ERRORES.AlmacenNoDisponible)).toContain('no está disponible');
+    expect(describirError(ERRORES.SinPortapapeles)).toBe('Este navegador no permite copiar al portapapeles.');
+    expect(describirError(ERRORES.ParametroInvalido)).toBe('El jugador debe tener de 1 a 24 caracteres.');
   });
 });
