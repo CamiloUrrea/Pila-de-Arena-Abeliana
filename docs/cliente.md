@@ -1,6 +1,6 @@
 # Cliente web (`@pila/game`)
 
-El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, la semilla y el lado; en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada (T3.3a), la cascada se anima oleada a oleada a partir de los eventos del núcleo. Todavía no hay puntos flotantes, etiquetas de oleada ni ritmo ajustable (T3.3b), indicadores (T3.4), reinicio de ronda (T3.5) ni sonido.
+El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, la semilla y el lado, la etiqueta de cadena y el ritmo; en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Todavía no hay indicadores (T3.4), reinicio de ronda (T3.5) ni sonido.
 
 ## Arrancarlo
 
@@ -18,8 +18,9 @@ pnpm --filter @pila/game preview   # sirve la compilación
 | --- | --- | --- |
 | `semilla` | Entero de 0 a 4294967295, escrito solo con dígitos. | Una semilla aleatoria de 32 bits (`crypto.getRandomValues`). |
 | `lado` | Entero de 1 a 9, escrito solo con dígitos. | 3, el de `CONFIG_INICIAL`. |
+| `ritmo` | Uno de los ritmos permitidos: 0,25, 0,5, 0,75, 1, 1,5, 2, 3 o 4, con punto o con coma decimal (`0.5` o `0,5`). | 1. |
 
-Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4`. Un parámetro presente pero inválido (vacío, negativo, decimal, fuera de rango o no numérico) no arranca el juego: la página muestra un mensaje en español con cada error. Los parámetros desconocidos se ignoran. La ronda se crea con `crearRonda({ ...CONFIG_INICIAL, lado }, semilla)`; si el núcleo rechaza la configuración, también se muestra el error.
+Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4&ritmo=0.5`. Un parámetro presente pero inválido (vacío, negativo, decimal donde no se admite, fuera de rango, un ritmo que no está en la lista o no numérico) no arranca el juego: la página muestra un mensaje en español con cada error. Los parámetros desconocidos se ignoran. La ronda se crea con `crearRonda({ ...CONFIG_INICIAL, lado }, semilla)`; si el núcleo rechaza la configuración, también se muestra el error.
 
 ## Controles
 
@@ -33,7 +34,8 @@ Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4`. Un parámetro present
 | Clic o toque en la última ficha colocada | Lo mismo que «Deshacer». En otra ficha colocada, un mensaje explica que solo se puede deshacer la última. |
 | `Z` o `Retroceso` | Lo mismo que «Deshacer». |
 | Clic o toque en «Confirmar», o `Intro` o `Espacio` | Confirma la tirada, si la mano está completa. Si no, un mensaje pide colocar todos los granos. |
-| Durante la cascada: cualquier clic o toque, `Intro` o `Espacio` | Salta al final de la animación. Lo demás no hace nada. |
+| Durante la cascada: cualquier clic o toque, `Intro` o `Espacio` | Salta al final de la animación. Lo demás no hace nada, salvo el ritmo. |
+| `+` o `-` | Sube o baja el ritmo de la animación al siguiente valor permitido. Funciona en cualquier momento, también durante la cascada. |
 | Pasar el ratón por una celda | Vista previa de la colocación candidata (ver más abajo). |
 
 Las teclas no hacen nada con Ctrl, Alt o Cmd pulsados, para no interferir con los atajos del sistema y del navegador; Mayúsculas sí se admite, para que `Z` funcione.
@@ -48,6 +50,14 @@ El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre l
 
 **Confirmar y cascada.** El botón «Confirmar» solo está activo con la mano completa. Al confirmar, la rejilla se anima con lo que pasa en el núcleo: primero aparecen los granos colocados, y después, en cada oleada, las celdas inestables parpadean en el color de inestable y se derrumban, y sus cuatro granos vuelan a las vecinas o salen del tablero desvaneciéndose. Mientras tanto, las fichas y los botones se ven atenuados y la línea de información dice «Resolviendo…». Al terminar se dibuja el estado nuevo, con la mano nueva.
 
+**Puntos flotantes.** Cada grano que sale del tablero deja un punto flotante con lo que vale (por ejemplo «+1» en la oleada 1 y «+1,5» en la 2, con el multiplicador 50 de la configuración inicial), junto al borde del tablero por el lado por el que sale. Dura el paso de derrumbe de su oleada: sube un poco y se desvanece en el último 40 % de su vida. Crece con la oleada: su escala es `1 + 0,15 × (k − 1)`, con tope 2.
+
+**Etiqueta de cadena.** Durante la alerta y el derrumbe de la oleada `k`, el centro de la banda superior muestra «Oleada k · ×m · +P»: el multiplicador `m` de los granos de esa oleada (`(100 + multiplicadorPorOleada × (k − 1)) / 100`, por ejemplo «×1», «×1,5», «×2») resaltado en amarillo, y los puntos `P` de la tirada hasta ese momento. Los puntos suben al terminar cada oleada, como en el núcleo, y no grano a grano. Fuera de la cascada la etiqueta no aparece. La semilla y el lado pasan a la izquierda de la banda.
+
+**Ritmo.** El ritmo multiplica el tiempo de la animación: con ×2 dura la mitad y con ×0,5, el doble. Empieza en el de la URL (`?ritmo=`, 1 por defecto) y cambia con `+` y `-` entre los valores permitidos (0,25, 0,5, 0,75, 1, 1,5, 2, 3 y 4); en los extremos se queda. Se muestra siempre a la derecha de la banda superior («ritmo ×1»).
+
+**Aceleración progresiva.** Las cascadas largas van acelerando: la alerta y el derrumbe de la oleada `k` duran la base por `max(0,4; 0,9^(k − 1))`. La oleada 1 va a la duración base, cada oleada dura un 10 % menos que la anterior y desde la décima ninguna baja del 40 %. La adición no se acelera. El ritmo se aplica además, sobre estas duraciones.
+
 **Final de ronda (provisional).** Si la tirada gana o pierde la ronda, al terminar la cascada un velo sobre el tablero muestra «Ronda ganada» o «Ronda perdida» con los puntos finales y la nota «Recarga la página para jugar otra ronda». No hay más interacción hasta recargar; el reinicio llega en T3.5.
 
 **Banda inferior.** Las fichas de la mano van en una fila centrada, en el orden de la mano: el normal es un círculo casi blanco, el pesado un círculo mayor violeta con dos puntos y el explosivo una estrella roja. Una ficha ya colocada se atenúa y la seleccionada lleva un anillo. Debajo, la línea de información describe el grano seleccionado («Explosivo: +1 en la celda y +1 en cada vecina»), dice «Mano completa» o muestra el mensaje de la última acción imposible. A la derecha, el botón primario «Confirmar» y, debajo, «Deshacer»; cada uno se ve apagado cuando no se puede usar.
@@ -58,12 +68,13 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 
 | Módulo | Qué hace | ¿Puro? |
 | --- | --- | --- |
-| `src/parametros.ts` | `leerParametros(busqueda, generarSemilla)`: parsea la URL y devuelve los parámetros o una lista de errores tipados con su mensaje. La semilla por defecto la da la función inyectada. | Sí |
+| `src/parametros.ts` | `leerParametros(busqueda, generarSemilla)`: parsea la URL (semilla, lado y ritmo) y devuelve los parámetros o una lista de errores tipados con su mensaje. La semilla por defecto la da la función inyectada. | Sí |
 | `src/tema.ts` | Datos del aspecto: colores, bandas, proporciones, tipografía, fichas, vista previa y botón. | Sí (solo datos) |
 | `src/textos.ts` | `TEXTOS`, los textos de la interfaz; `describirGrano(tipo)`, la descripción de un grano generada de `DEFINICIONES_GRANOS`; y `describirError(error)`, el mensaje de cada error del controlador y del núcleo. | Sí |
 | `src/entrada.ts` | `accionDeTecla({ tecla, ctrl, alt, meta })`: qué gesto dispara una tecla, o `null`. | Sí |
 | `src/controlador.ts` | `iniciarControlador`, `seleccionar`, `ciclar`, `colocar`, `deshacer`, `deshacerDesdeFicha` y `confirmar` sobre un estado de interfaz `{ estado, seleccionado }`. | Sí |
-| `src/cascada.ts` | `construirCascada(celdasAntes, eventos, lado, umbral)`: los pasos de la animación de una tirada. `muestrear(cascada, tMs)`: el cuadro de un instante. | Sí |
+| `src/cascada.ts` | `construirCascada(celdasAntes, eventos, lado, umbral, multiplicadorPorOleada)`: los pasos de la animación de una tirada. `muestrear(cascada, tMs)`: el cuadro de un instante. `factorAceleracion`, `valorGranoFuera` y `escalaPopup`: las fórmulas de la aceleración, del valor de un grano y de la escala de los puntos flotantes. | Sí |
+| `src/ritmo.ts` | `RITMOS`, los ritmos permitidos; `siguienteRitmo(actual, direccion)` y `formatearRitmo(ritmo)`. | Sí |
 | `src/reproductor.ts` | `crearReproductor`, `avanzar`, `saltar`, `cuadroActual` y `terminado`: el tiempo de una cascada, inmutable. | Sí |
 | `src/previsualizacion.ts` | `calcularPrevistas(estado)`: la rejilla proyectada y los granos previstos por celda. `calcularPrevistasConCandidata(estado, indice, celda)`: lo mismo con una colocación hipotética más, y aparte lo que añade solo ella. | Sí |
 | `src/disposicion.ts` | `disponer(ancho, alto, lado)`: la geometría de las bandas y de cada celda. `disponerMano(ventana, n)`: las fichas, la descripción y los botones. `celdaEn`, `fichaEn`, `botonConfirmarEn` y `botonDeshacerEn`: qué hay bajo un punto. | Sí |
@@ -92,13 +103,15 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 
 **La animación como función pura del tiempo.** La cascada no se anima con estado mutable ni con temporizadores: se describe con datos y se muestrea.
 
-1. **Pasos.** `construirCascada(celdasAntes, eventos, lado, umbral)` recorre los eventos de `Confirmar` en el orden de la especificación y devuelve los pasos con su duración base del tema, al ritmo 1:
+1. **Pasos.** `construirCascada(celdasAntes, eventos, lado, umbral, multiplicadorPorOleada)` recorre los eventos de `Confirmar` en el orden de la especificación y devuelve los pasos con su duración del tema al ritmo 1 (la alerta y el derrumbe, con la aceleración de su oleada):
    - `adicion` (300 ms), si hay `AdicionAplicada`: la rejilla antes y después de sumar los granos colocados, y las celdas afectadas;
    - por cada oleada, `alerta` (160 ms), con las celdas inestables de su `OleadaIniciada`, y `derrumbe` (320 ms), con la rejilla antes y después y cuatro movimientos por celda que cae (`{ desde, hacia, fuera, direccion }`, en el orden arriba, derecha, abajo, izquierda).
 
-   Para reconstruir las rejillas intermedias solo usa la geometría y lo que dicen los eventos: cada celda de la oleada pierde 4 y envía 1 en cada dirección; los granos que caen fuera son los de sus `GranoFuera`, y los que llegan a una vecina interior se suman cuando todas las inestables ya perdieron los suyos. Si los eventos no cuadran (un `Derrumbe` fuera de su `OleadaIniciada`, una dirección desconocida, un `GranoFuera` que falta o sobra, unos totales de `OleadaTerminada` que no coinciden, una cascada que acaba con celdas inestables…) devuelve el error `CascadaInvalida`, sin lanzar. Las pruebas reconstruyen cada `Confirmar` de partidas aleatorias y comparan las celdas finales con las del núcleo y las intermedias con un oráculo de oleadas escrito aparte.
-2. **Cuadros.** `muestrear(cascada, tMs)` es una función pura del instante (acotado a `[0, duración total]`; NaN cuenta como 0). Devuelve la carga que se muestra en cada celda, los granos en vuelo (posición en unidades de celda, si salen del tablero y su opacidad), las alertas (celda e intensidad de 0 a 1) y las apariciones. En la adición la carga sube grano a grano; en la alerta no cambia y la intensidad pulsa; en el derrumbe, las celdas que caen pierden sus 4 granos al empezar, los granos vuelan con la curva de aceleración del tema hasta el centro de la vecina, o hasta algo más allá del borde, desvaneciéndose en el último tramo, y los interiores se suman a su destino al llegar, al final del paso. Un instante en la frontera entre dos pasos pertenece al que empieza. En 0 el cuadro es la rejilla anterior y en la duración total, exactamente la final. Los granos no se crean ni se pierden en vuelo: en un derrumbe, las cargas mostradas más los granos en vuelo suman lo de antes del paso.
-3. **Reproductor.** `crearReproductor(cascada)` empieza en 0; `avanzar(rep, dtMs, ritmo = 1)` suma `dtMs × ritmo` (un valor negativo, NaN o infinito cuenta como 0); `saltar(rep)` lo lleva al final; `cuadroActual(rep)` y `terminado(rep)` lo leen. Cada operación devuelve un reproductor nuevo. El render solo le pasa el `deltaMS` del ticker de PixiJS y dibuja el cuadro actual. El ritmo ajustable llegará en T3.3b.
+   Para reconstruir las rejillas intermedias solo usa la geometría y lo que dicen los eventos: cada celda de la oleada pierde 4 y envía 1 en cada dirección; los granos que caen fuera son los de sus `GranoFuera`, y los que llegan a una vecina interior se suman cuando todas las inestables ya perdieron los suyos. Cada paso de derrumbe guarda además los `GranoFuera` de su oleada (celda de origen, dirección y puntos) y los puntos que se ganan en ella. Si los eventos no cuadran (un `GranoFuera` que no vale `100 + multiplicadorPorOleada × (k − 1)`, unos totales de `OleadaTerminada` o `TiradaResuelta` que no coinciden con sus `GranoFuera`, un `Derrumbe` fuera de su `OleadaIniciada`, una dirección desconocida, un `GranoFuera` que falta o sobra, unos totales de `OleadaTerminada` que no coinciden, una cascada que acaba con celdas inestables…) devuelve el error `CascadaInvalida`, sin lanzar. Las pruebas reconstruyen cada `Confirmar` de partidas aleatorias y comparan las celdas finales con las del núcleo y las intermedias con un oráculo de oleadas escrito aparte.
+2. **Cuadros.** `muestrear(cascada, tMs)` es una función pura del instante (acotado a `[0, duración total]`; NaN cuenta como 0). Devuelve la carga que se muestra en cada celda, los puntos flotantes, la etiqueta de la oleada en curso (o `null`), los puntos de la tirada hasta ese instante (`puntosTirada`, que al final valen los `puntosGanados` de `TiradaResuelta`), los granos en vuelo (posición en unidades de celda, si salen del tablero y su opacidad), las alertas (celda e intensidad de 0 a 1) y las apariciones. En la adición la carga sube grano a grano; en la alerta no cambia y la intensidad pulsa; en el derrumbe, las celdas que caen pierden sus 4 granos al empezar, los granos vuelan con la curva de aceleración del tema hasta el centro de la vecina, o hasta algo más allá del borde, desvaneciéndose en el último tramo, y los interiores se suman a su destino al llegar, al final del paso. Un instante en la frontera entre dos pasos pertenece al que empieza. En 0 el cuadro es la rejilla anterior y en la duración total, exactamente la final. Los granos no se crean ni se pierden en vuelo: en un derrumbe, las cargas mostradas más los granos en vuelo suman lo de antes del paso.
+3. **Reproductor.** `crearReproductor(cascada)` empieza en 0; `avanzar(rep, dtMs, ritmo = 1)` suma `dtMs × ritmo` (un valor negativo, NaN o infinito cuenta como 0); `saltar(rep)` lo lleva al final; `cuadroActual(rep)` y `terminado(rep)` lo leen. Cada operación devuelve un reproductor nuevo. El render le pasa el `deltaMS` del ticker de PixiJS y el ritmo actual, y dibuja el cuadro actual. Un ritmo inválido (0, negativo, NaN o infinito) no avanza.
+
+**Objetos persistentes.** Durante una cascada solo se redibuja el tablero en cada cuadro; la mano se dibuja una vez al empezar. Los puntos flotantes usan una reserva de objetos de texto: se crean la primera vez que hacen falta, como mucho `4 × 9` (los granos que pueden salir en una oleada con el lado máximo), y se reutilizan cambiando su texto, posición, escala y opacidad. Los textos de la banda superior (semilla, etiqueta y ritmo) también son persistentes.
 
 Mientras se anima, las celdas se dibujan con el color de su carga (aunque tengan 4 o más) y los puntos tipo dado de la carga mostrada; lo inestable se ve con el parpadeo de la alerta. Los granos en vuelo son círculos claros con contorno oscuro y las celdas que reciben granos crecen un poco y vuelven a su tamaño. Si la cascada no se pudiera construir, se muestra el estado nuevo sin animación y un mensaje de error interno.
 
@@ -157,7 +170,12 @@ Todo el aspecto vive en `src/tema.ts`, en el objeto `TEMA`:
 - **`fichas`:** forma (`circulo` o `estrella`), color, escala y puntos de cada tipo; opacidad de las colocadas, anillo de la seleccionada y forma de la estrella.
 - **`boton`** y **`botonPrimario`:** colores de Deshacer y de Confirmar, activos y desactivados. `mano.alfaBloqueada` es la opacidad de fichas y botones durante la cascada y con la ronda terminada.
 - **`animacion`:** duraciones base de los pasos (adición 300 ms, alerta 160 ms, derrumbe 320 ms), curva de aceleración del vuelo (`lineal`, `entradaSalidaCuadratica` o `entradaSalidaCubica`), pulsos y opacidad del parpadeo, distancia que recorren los granos que salen (1,1 celdas) y tramo final en que se desvanecen, aumento de las celdas que reciben granos, y radio, relleno y contorno de los granos en vuelo.
+- **`animacion.aceleracion`:** `razon` (0,9) y `minimo` (0,4) de la aceleración progresiva.
+- **`animacion.popups`:** relleno amarillo `#FFE600` y contorno oscuro `#0A0420` de los puntos flotantes, tamaño del texto relativo a la celda (0,3), distancia al borde (0,3 celdas), ascenso (0,5 celdas), tramo final en que se desvanecen (0,4) y crecimiento por oleada (0,15) con su tope (2).
+- **`bandaSuperior`:** margen lateral, tamaño y colores de la etiqueta de cadena (`#F5F0FF`, con el multiplicador en `#FFE600`) y tamaño y color del texto de ritmo (`#B8AEE0`).
 - **`finDeRonda`:** tamaño del texto central del final de ronda y opacidad del velo.
+
+Los ritmos permitidos están en `RITMOS`, en `src/ritmo.ts`.
 - **`bandas`:** el reparto vertical. `BANDAS_INICIALES` reserva el 12 % para los indicadores, el 63 % para el tablero y el 25 % para la mano.
 - **`proporciones`:** margen del tablero, hueco y radio de las celdas, y tamaño de los textos, todo relativo al tamaño de la celda o de la banda.
 - **`tipografia`:** la fuente del sistema y el peso del número de respaldo y del texto de la banda superior.
@@ -177,7 +195,9 @@ Los colores son provisionales: el arte definitivo sustituirá el tema sin tocar 
 - los fantasmas de la candidata, mezclados con su opacidad sobre la celda en la que se dibujan, de carga 0 a 5: al menos 3;
 - el mensaje de error contra el fondo: al menos 4,5;
 - los granos en vuelo contra el fondo y contra cada color de celda: en el peor caso, el relleno o el contorno llega a 3;
-- el botón Confirmar activo contra el fondo y su texto: al menos 4,5.
+- el botón Confirmar activo contra el fondo y su texto: al menos 4,5;
+- el relleno de los puntos flotantes contra el fondo: al menos 4,5; con su contorno, contra cada color de celda: en el peor caso, 3;
+- la etiqueta de cadena (y su multiplicador resaltado) contra el fondo: al menos 7; el texto de ritmo: al menos 4,5.
 
 ## Reglas de importación
 

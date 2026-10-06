@@ -157,7 +157,8 @@ describe('describirFinDeRonda', () => {
   };
 
   it('ronda ganada y perdida, con los puntos finales en centésimas', () => {
-    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 523_450 })).toBe('Ronda ganada · 5234,50 puntos');
+    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 523_450 })).toBe('Ronda ganada · 5234,5 puntos');
+    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 500_000 })).toBe('Ronda ganada · 5000 puntos');
     expect(describirFinDeRonda({ ...estado(), fase: 'perdida', puntos: 4_007 })).toBe('Ronda perdida · 40,07 puntos');
   });
 
@@ -165,7 +166,18 @@ describe('describirFinDeRonda', () => {
     expect(describirFinDeRonda(estado())).toBeNull();
   });
 
-  it('formatearPuntos usa aritmética entera con dos decimales', () => {
-    expect([0, 5, 100, 150, 523_450].map(formatearPuntos)).toEqual(['0,00', '0,05', '1,00', '1,50', '5234,50']);
+  it('formatearPuntos usa aritmética entera, coma decimal y sin ceros sobrantes', () => {
+    expect([0, 5, 10, 100, 150, 175, 200, 4007, 523_450].map(formatearPuntos)).toEqual([
+      '0',
+      '0,05',
+      '0,1',
+      '1',
+      '1,5',
+      '1,75',
+      '2',
+      '40,07',
+      '5234,5',
+    ]);
+    expect(formatearPuntos(-150)).toBe('−1,5');
   });
 });

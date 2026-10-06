@@ -146,6 +146,42 @@ export type Tema = {
       readonly contorno: number;
       readonly grosorContorno: number;
     };
+    /**
+     * Aceleración progresiva: la alerta y el derrumbe de la oleada `k` duran la base por
+     * `max(minimo, razon^(k − 1))`. La adición no se acelera.
+     */
+    readonly aceleracion: { readonly razon: number; readonly minimo: number };
+    /** Puntos flotantes, uno por grano que sale del tablero. */
+    readonly popups: {
+      readonly relleno: number;
+      readonly contorno: number;
+      /** Grosor del contorno, como fracción del tamaño del texto. */
+      readonly grosorContorno: number;
+      /** Tamaño del texto, como fracción del lado de la celda (antes de la escala por oleada). */
+      readonly tamano: number;
+      /** Distancia al borde del tablero por el lado por el que sale el grano, en lados de celda. */
+      readonly separacion: number;
+      /** Lo que sube a lo largo de su vida, en lados de celda. */
+      readonly ascenso: number;
+      /** Último tramo de su vida, como fracción, en el que se desvanece. */
+      readonly desvanecer: number;
+      /** Escala por oleada: `min(escalaMaxima, 1 + crecimientoPorOleada × (k − 1))`. */
+      readonly crecimientoPorOleada: number;
+      readonly escalaMaxima: number;
+    };
+  };
+  /** Banda superior: la etiqueta de cadena (centrada) y el ritmo (a la derecha). La semilla va a la izquierda. */
+  readonly bandaSuperior: {
+    /** Margen lateral, como fracción del ancho de la banda. */
+    readonly margen: number;
+    readonly etiqueta: {
+      /** Tamaño del texto, como fracción del alto de la banda. */
+      readonly tamano: number;
+      readonly color: number;
+      /** Color del multiplicador, resaltado. */
+      readonly resaltado: number;
+    };
+    readonly ritmo: { readonly tamano: number; readonly color: number };
   };
   /** Texto central del final de ronda, como fracción del lado del tablero. */
   readonly finDeRonda: { readonly titulo: number; readonly nota: number; readonly velo: number };
@@ -223,6 +259,23 @@ export const TEMA: Tema = {
     tramoDesvanecer: 0.4,
     escalaAparicion: 0.12,
     granoVuelo: { radio: 0.11, relleno: 0xf5f0ff, contorno: 0x0a0420, grosorContorno: 0.3 },
+    aceleracion: { razon: 0.9, minimo: 0.4 },
+    popups: {
+      relleno: 0xffe600,
+      contorno: 0x0a0420,
+      grosorContorno: 0.18,
+      tamano: 0.3,
+      separacion: 0.3,
+      ascenso: 0.5,
+      desvanecer: 0.4,
+      crecimientoPorOleada: 0.15,
+      escalaMaxima: 2,
+    },
+  },
+  bandaSuperior: {
+    margen: 0.02,
+    etiqueta: { tamano: 0.4, color: 0xf5f0ff, resaltado: 0xffe600 },
+    ritmo: { tamano: 0.22, color: 0xb8aee0 },
   },
   finDeRonda: { titulo: 0.09, nota: 0.045, velo: 0.82 },
   tipografia: {

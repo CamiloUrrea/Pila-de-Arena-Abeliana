@@ -1,17 +1,24 @@
 // Bot de prueba: juega partidas aleatorias con la interfaz pública del núcleo y guarda cada `Confirmar`. Las
 // elecciones salen de un flujo de azar del propio núcleo sembrado por la prueba, así que son reproducibles.
 import { CONFIG_INICIAL, aplicar, crearRonda, derivarFlujo, enteroEnRango } from '@pila/core';
-import type { Estado, EstadoFlujo, Evento } from '@pila/core';
+import type { Config, Estado, EstadoFlujo, Evento } from '@pila/core';
 
 /** Un `Confirmar` jugado: el estado de antes, sus eventos y el estado de después. */
 export type Tirada = { readonly antes: Estado; readonly eventos: readonly Evento[]; readonly despues: Estado };
 
 /**
  * Juega una ronda con `lado` y `semilla`, colocando cada grano en una celda elegida al azar con `semillaBot`, hasta
- * que termina o se han jugado `maxTiradas` tiradas. Devuelve cada `Confirmar`.
+ * que termina o se han jugado `maxTiradas` tiradas. `cambios` modifica `CONFIG_INICIAL` (por ejemplo, el
+ * multiplicador). Devuelve cada `Confirmar`.
  */
-export function jugar(lado: number, semilla: number, semillaBot: number, maxTiradas = 20): Tirada[] {
-  const ronda = crearRonda({ ...CONFIG_INICIAL, lado }, semilla);
+export function jugar(
+  lado: number,
+  semilla: number,
+  semillaBot: number,
+  maxTiradas = 20,
+  cambios: Partial<Config> = {},
+): Tirada[] {
+  const ronda = crearRonda({ ...CONFIG_INICIAL, ...cambios, lado }, semilla);
   if (!ronda.ok) throw new Error(`configuración inválida: ${ronda.error.campo}`);
   let estado = ronda.valor.estado;
   let flujo: EstadoFlujo = derivarFlujo(semillaBot, 'mazo');

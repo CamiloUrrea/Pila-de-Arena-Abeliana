@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import type { Estado, Evento } from '@pila/core';
-import { construirCascada, muestrear } from '../src/cascada.ts';
+import { construirCascada, factorAceleracion, muestrear } from '../src/cascada.ts';
 import type { Cascada, PasoDerrumbe } from '../src/cascada.ts';
 import { TEMA } from '../src/tema.ts';
 import { jugar } from './bot.ts';
@@ -38,7 +38,7 @@ const suma = (c: Celdas): number => c.flat().reduce((a, b) => a + b, 0);
 
 function cascadaDe(t: Tirada): Cascada {
   const { lado, umbral } = t.antes.config;
-  const r = construirCascada(t.antes.celdas, t.eventos, lado, umbral);
+  const r = construirCascada(t.antes.celdas, t.eventos, lado, umbral, t.antes.config.multiplicadorPorOleada);
   if (!r.ok) throw new Error(`cascada inválida: ${r.error.motivo}`);
   return r.valor;
 }
@@ -103,12 +103,14 @@ describe('construirCascada contra el núcleo', () => {
     );
   });
 
-  it('las duraciones de los pasos salen del tema y suman la duración total', () => {
+  it('las duraciones de los pasos salen del tema, con la aceleración por oleada, y suman la duración total', () => {
     const [t] = jugar(3, 2026, 7, 1);
     if (t === undefined) throw new Error('sin tiradas');
     const cascada = cascadaDe(t);
     const { duraciones } = TEMA.animacion;
-    for (const p of cascada.pasos) expect(p.duracion).toBe(duraciones[p.tipo]);
+    for (const p of cascada.pasos) {
+      expect(p.duracion).toBe(duraciones[p.tipo] * (p.tipo === 'adicion' ? 1 : factorAceleracion(p.k)));
+    }
     expect(cascada.duracionTotal).toBe(cascada.pasos.reduce((a, p) => a + p.duracion, 0));
   });
 });
@@ -140,7 +142,7 @@ describe('construirCascada con eventos escritos a mano', () => {
   ];
 
   it('un derrumbe en el centro reparte un grano a cada vecina', () => {
-    const r = construirCascada(centro, eventosCentro, 3, UMBRAL);
+    const r = construirCascada(centro, eventosCentro, 3, UMBRAL, 50);
     expect(r.ok && r.valor.celdasFinales).toEqual([
       [0, 1, 0],
       [1, 0, 1],
@@ -150,7 +152,7 @@ describe('construirCascada con eventos escritos a mano', () => {
   });
 
   it('un derrumbe en una esquina saca dos granos, arriba (y − 1) e izquierda (x − 1)', () => {
-    const r = construirCascada(esquina, eventosEsquina, 2, UMBRAL);
+    const r = construirCascada(esquina, eventosEsquina, 2, UMBRAL, 50);
     if (!r.ok) throw new Error(r.error.motivo);
     expect(r.valor.celdasFinales).toEqual([
       [0, 1],
@@ -166,7 +168,7 @@ describe('construirCascada con eventos escritos a mano', () => {
   });
 
   it('una adición sin oleadas da un único paso de adición', () => {
-    const r = construirCascada(centro.map((f) => f.map(() => 0)), [{ tipo: 'AdicionAplicada', x: 2, y: 0, cantidad: 3 }], 3, UMBRAL);
+    const r = construirCascada(centro.map((f) => f.map(() => 0)), [{ tipo: 'AdicionAplicada', x: 2, y: 0, cantidad: 3 }], 3, UMBRAL, 50);
     if (!r.ok) throw new Error(r.error.motivo);
     expect(r.valor.pasos.map((p) => p.tipo)).toEqual(['adicion']);
     expect(r.valor.celdasFinales[0]).toEqual([0, 0, 3]);
@@ -174,7 +176,7 @@ describe('construirCascada con eventos escritos a mano', () => {
 
   it('sin eventos de cascada no hay pasos y la duración es 0', () => {
     const vacia = centro.map((f) => f.map(() => 1));
-    const r = construirCascada(vacia, [{ tipo: 'TiradaConfirmada', numero: 1 }], 3, UMBRAL);
+    const r = construirCascada(vacia, [{ tipo: 'TiradaConfirmada', numero: 1 }], 3, UMBRAL, 50);
     expect(r.ok && r.valor.duracionTotal).toBe(0);
     expect(r.ok && muestrear(r.valor, 50).terminado).toBe(true);
   });
@@ -208,7 +210,7 @@ describe('construirCascada con eventos escritos a mano', () => {
   ];
 
   it.each(casos)('%s da CascadaInvalida sin lanzar', (_, celdas, eventos, lado) => {
-    const r = construirCascada(celdas, eventos, lado, UMBRAL);
+    const r = construirCascada(celdas, eventos, lado, UMBRAL, 50);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.tipo).toBe('CascadaInvalida');
@@ -223,7 +225,7 @@ describe('construirCascada con eventos escritos a mano', () => {
       fc.property(fc.shuffledSubarray([...t.eventos]), (eventos) => {
         const copia = structuredClone(eventos);
         const celdas = structuredClone(t.antes.celdas);
-        const r = construirCascada(celdas, eventos, 4, UMBRAL);
+        const r = construirCascada(celdas, eventos, 4, UMBRAL, 50);
         expect(r.ok || r.error.tipo === 'CascadaInvalida').toBe(true);
         expect(eventos).toEqual(copia);
         expect(celdas).toEqual(t.antes.celdas);
@@ -252,7 +254,17 @@ describe('muestrear', () => {
       expect(inicio.celdas).toEqual(c.celdasAntes);
       expect(inicio.terminado).toBe(false);
       const fin = muestrear(c, c.duracionTotal);
-      expect(fin).toEqual({ tMs: c.duracionTotal, celdas: c.celdasFinales, granosEnVuelo: [], alertas: [], adiciones: [], terminado: true });
+      expect(fin).toEqual({
+        tMs: c.duracionTotal,
+        celdas: c.celdasFinales,
+        granosEnVuelo: [],
+        alertas: [],
+        adiciones: [],
+        popups: [],
+        etiqueta: null,
+        puntosTirada: c.puntosGanados,
+        terminado: true,
+      });
     }
   });
 

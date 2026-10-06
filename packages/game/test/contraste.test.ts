@@ -141,3 +141,28 @@ describe('contraste de la animación y del botón Confirmar (WCAG)', () => {
     expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('contraste de los puntos flotantes, la etiqueta y el ritmo (WCAG)', () => {
+  const superficies: (number | undefined)[] = [colores.fondo, ...colores.carga, colores.inestable];
+
+  it('el relleno de los puntos flotantes se lee sobre el fondo (al menos 4,5)', () => {
+    expect(contraste(TEMA.animacion.popups.relleno, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('con su contorno, los puntos flotantes se leen sobre cada color de celda (peor caso al menos 3)', () => {
+    const { relleno, contorno } = TEMA.animacion.popups;
+    expect(superficies.every((s) => s !== undefined)).toBe(true);
+    const peor = Math.min(...superficies.map((s) => Math.max(contraste(relleno, s ?? 0), contraste(contorno, s ?? 0))));
+    expect(peor).toBeGreaterThanOrEqual(3);
+  });
+
+  it('la etiqueta de cadena, también su multiplicador resaltado, se lee sobre el fondo (al menos 7)', () => {
+    const { color, resaltado } = TEMA.bandaSuperior.etiqueta;
+    expect(contraste(color, colores.fondo)).toBeGreaterThanOrEqual(7);
+    expect(contraste(resaltado, colores.fondo)).toBeGreaterThanOrEqual(7);
+  });
+
+  it('el texto del ritmo se lee sobre el fondo (al menos 4,5)', () => {
+    expect(contraste(TEMA.bandaSuperior.ritmo.color, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+});

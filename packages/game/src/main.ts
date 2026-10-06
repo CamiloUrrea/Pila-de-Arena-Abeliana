@@ -44,14 +44,14 @@ async function arrancar(): Promise<void> {
     );
     return;
   }
-  const { semilla, lado } = parametros.valor;
+  const { semilla, lado, ritmo } = parametros.valor;
   const ronda = crearRonda({ ...CONFIG_INICIAL, lado }, semilla);
   if (!ronda.ok) {
     mostrarError(TEXTOS.errorInicio, [TEXTOS.configuracionInvalida(ronda.error.campo, ronda.error.motivo)]);
     return;
   }
   const contenedor = document.getElementById('juego') ?? document.body;
-  const escena = await crearEscena(contenedor, semilla);
+  const escena = await crearEscena(contenedor, semilla, ritmo);
   escena.mostrarEstado(ronda.valor.estado);
 }
 

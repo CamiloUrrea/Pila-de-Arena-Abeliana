@@ -8,7 +8,8 @@ import { jugar } from './bot.ts';
 /** Una cascada real con oleadas, de una partida del bot. */
 function cascadaReal(): Cascada {
   for (const t of jugar(3, 2026, 1)) {
-    const r = construirCascada(t.antes.celdas, t.eventos, t.antes.config.lado, t.antes.config.umbral);
+    const { lado, umbral, multiplicadorPorOleada } = t.antes.config;
+    const r = construirCascada(t.antes.celdas, t.eventos, lado, umbral, multiplicadorPorOleada);
     if (r.ok && r.valor.pasos.some((p) => p.tipo === 'derrumbe')) return r.valor;
   }
   throw new Error('sin cascada con derrumbes');
@@ -74,7 +75,14 @@ describe('reproductor', () => {
   });
 
   it('una cascada sin pasos ya está terminada', () => {
-    const vacia: Cascada = { pasos: [], duracionTotal: 0, celdasAntes: [[1]], celdasFinales: [[1]] };
+    const vacia: Cascada = {
+      pasos: [],
+      duracionTotal: 0,
+      celdasAntes: [[1]],
+      celdasFinales: [[1]],
+      multiplicadorPorOleada: 50,
+      puntosGanados: 0,
+    };
     expect(terminado(crearReproductor(vacia))).toBe(true);
   });
 

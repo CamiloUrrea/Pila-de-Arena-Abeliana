@@ -12,6 +12,10 @@ export const TEXTOS = {
   resolviendo: 'Resolviendo…',
   recargar: 'Recarga la página para jugar otra ronda',
   informacion: (semilla: number, lado: number): string => `semilla ${semilla} · lado ${lado}`,
+  /** Partes de la etiqueta de cadena «Oleada k · ×m · +P»; el multiplicador va aparte para resaltarlo. */
+  oleada: (k: number): string => `Oleada ${k} · `,
+  puntosDeTirada: (puntos: string): string => ` · +${puntos}`,
+  ritmo: (ritmo: string): string => `ritmo ${ritmo}`,
   errorInicio: 'No se puede empezar la ronda',
   configuracionInvalida: (campo: string, motivo: string): string => `Configuración inválida: ${campo}: ${motivo}.`,
 } as const;
@@ -147,11 +151,15 @@ export function describirError(error: ErrorControlador | ErrorCascada): string {
   }
 }
 
-/** Puntos en centésimas como texto con dos decimales y coma: 523 → «5,23». Aritmética entera. */
+/**
+ * Puntos en centésimas como texto con coma decimal y sin ceros sobrantes: 523 → «5,23», 150 → «1,5», 200 → «2».
+ * Aritmética entera.
+ */
 export function formatearPuntos(centesimas: number): string {
   const signo = centesimas < 0 ? '−' : '';
   const v = Math.abs(Math.trunc(centesimas));
-  return `${signo}${Math.floor(v / 100)},${String(v % 100).padStart(2, '0')}`;
+  const decimales = String(v % 100).padStart(2, '0').replace(/0+$/, '');
+  return `${signo}${Math.floor(v / 100)}${decimales === '' ? '' : `,${decimales}`}`;
 }
 
 /** «Ronda ganada» o «Ronda perdida» con los puntos finales; `null` si la ronda sigue en juego. */
