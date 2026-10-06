@@ -1,6 +1,6 @@
 # Cliente web (`@pila/game`)
 
-El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, la semilla y el lado, la etiqueta de cadena y el ritmo; en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Todavía no hay indicadores (T3.4), reinicio de ronda (T3.5) ni sonido.
+El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, los indicadores (semilla y lado, etiqueta de cadena, ritmo, medidor de desborde y tiradas); en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano y los recuentos del mazo. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Los indicadores de la ronda llegan en T3.4. Todavía no hay reinicio de ronda (T3.5) ni sonido.
 
 ## Arrancarlo
 
@@ -35,7 +35,7 @@ Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4&ritmo=0.5`. Un parámet
 | `Z` o `Retroceso` | Lo mismo que «Deshacer». |
 | Clic o toque en «Confirmar», o `Intro` o `Espacio` | Confirma la tirada, si la mano está completa. Si no, un mensaje pide colocar todos los granos. |
 | Durante la cascada: cualquier clic o toque, `Intro` o `Espacio` | Salta al final de la animación. Lo demás no hace nada, salvo el ritmo. |
-| `+` o `-` | Sube o baja el ritmo de la animación al siguiente valor permitido. Funciona en cualquier momento, también durante la cascada. |
+| `+` (o `=`) o `-` | Sube o baja el ritmo de la animación al siguiente valor permitido. `=` es un alias de `+`, porque en muchos teclados es la misma tecla sin Mayúsculas. Funciona en cualquier momento, también durante la cascada. |
 | Pasar el ratón por una celda | Vista previa de la colocación candidata (ver más abajo). |
 
 Las teclas no hacen nada con Ctrl, Alt o Cmd pulsados, para no interferir con los atajos del sistema y del navegador; Mayúsculas sí se admite, para que `Z` funcione.
@@ -52,7 +52,16 @@ El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre l
 
 **Puntos flotantes.** Cada grano que sale del tablero deja un punto flotante con lo que vale (por ejemplo «+1» en la oleada 1 y «+1,5» en la 2, con el multiplicador 50 de la configuración inicial), junto al borde del tablero por el lado por el que sale. Dura el paso de derrumbe de su oleada: sube un poco y se desvanece en el último 40 % de su vida. Crece con la oleada: su escala es `1 + 0,15 × (k − 1)`, con tope 2.
 
-**Etiqueta de cadena.** Durante la alerta y el derrumbe de la oleada `k`, el centro de la banda superior muestra «Oleada k · ×m · +P»: el multiplicador `m` de los granos de esa oleada (`(100 + multiplicadorPorOleada × (k − 1)) / 100`, por ejemplo «×1», «×1,5», «×2») resaltado en amarillo, y los puntos `P` de la tirada hasta ese momento. Los puntos suben al terminar cada oleada, como en el núcleo, y no grano a grano. Fuera de la cascada la etiqueta no aparece. La semilla y el lado pasan a la izquierda de la banda.
+**Etiqueta de cadena.** Durante la alerta y el derrumbe de la oleada `k`, el centro de la banda superior muestra «Oleada k · ×m · +P»: el multiplicador `m` de los granos de esa oleada (`(100 + multiplicadorPorOleada × (k − 1)) / 100`, por ejemplo «×1», «×1,5», «×2») resaltado en amarillo, y los puntos `P` de la tirada hasta ese momento. Los puntos suben al terminar cada oleada, como en el núcleo, y no grano a grano. Fuera de la cascada la etiqueta no aparece.
+
+**Indicadores (T3.4).** `indicadores.ts` los calcula del estado del núcleo, sin PixiJS:
+
+- **Medidor de desborde:** una barra con el progreso de los puntos hacia la meta (`proporcionMedidor(puntos, meta)`, acotado a `[0, 1]`) y, fuera de la barra, el texto «P / M» con `formatearPuntos`, para no depender del contraste con el relleno. El relleno cambia de color por tramos (`colorMedidor`): cian por debajo de la mitad, amarillo de la mitad a la meta y rosa con la meta alcanzada, con la barra llena. Durante una cascada muestra `puntosMostrados`: los puntos de antes más los de la tirada, que suben al terminar cada oleada. El relleno no salta: se acerca a su objetivo con `suavizar`, un suavizado exponencial determinista que el render llama con el `deltaMS` del ticker multiplicado por el ritmo.
+- **Tiradas:** fichas pequeñas, llenas las que quedan y solo con contorno las gastadas (`fichasTiradas`). Al confirmar se descuenta enseguida, porque el estado nuevo ya trae el valor nuevo.
+- **Mazo:** el texto de `describirMazo`, una línea por recuento («Mazo 17», «Normal 12», «Pesado 3», «Explosivo 2»), a la izquierda de la fila de fichas. Solo revela recuentos: `describirIndicadores` devuelve una estructura de números por tipo, nunca el orden de robo, y su resultado es el mismo para cualquier orden del mazo. Durante una cascada se muestra el mazo del estado de antes, coherente con la mano confirmada que sigue a la vista.
+- **Celdas cargadas:** las celdas estables a un grano de caer (`cargada`, con carga `umbral − 1`; con el umbral 4, las de 3) llevan un contorno casi blanco y fino por fuera de la celda, en el hueco, cuya opacidad pulsa entre 0,5 y 1 (`intensidadPulso`, con el tiempo del ticker). Solo mientras se coloca y sin animación en curso.
+
+`describirIndicadores(estado)` devuelve `{ medidor: { puntos, meta, proporcion, texto, metaAlcanzada }, tiradas: { total, restantes }, mazo: { total, porTipo } }`; `describirTiradas` da «Tiradas 3/5».
 
 **Ritmo.** El ritmo multiplica el tiempo de la animación: con ×2 dura la mitad y con ×0,5, el doble. Empieza en el de la URL (`?ritmo=`, 1 por defecto) y cambia con `+` y `-` entre los valores permitidos (0,25, 0,5, 0,75, 1, 1,5, 2, 3 y 4); en los extremos se queda. Se muestra siempre a la derecha de la banda superior («ritmo ×1»).
 
@@ -75,6 +84,7 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 | `src/controlador.ts` | `iniciarControlador`, `seleccionar`, `ciclar`, `colocar`, `deshacer`, `deshacerDesdeFicha` y `confirmar` sobre un estado de interfaz `{ estado, seleccionado }`. | Sí |
 | `src/cascada.ts` | `construirCascada(celdasAntes, eventos, lado, umbral, multiplicadorPorOleada)`: los pasos de la animación de una tirada. `muestrear(cascada, tMs)`: el cuadro de un instante. `factorAceleracion`, `valorGranoFuera` y `escalaPopup`: las fórmulas de la aceleración, del valor de un grano y de la escala de los puntos flotantes. | Sí |
 | `src/ritmo.ts` | `RITMOS`, los ritmos permitidos; `siguienteRitmo(actual, direccion)` y `formatearRitmo(ritmo)`. | Sí |
+| `src/indicadores.ts` | `proporcionMedidor`, `colorMedidor`, `puntosMostrados`, `describirIndicadores`, `fichasTiradas`, `suavizar` e `intensidadPulso`. | Sí |
 | `src/reproductor.ts` | `crearReproductor`, `avanzar`, `saltar`, `cuadroActual` y `terminado`: el tiempo de una cascada, inmutable. | Sí |
 | `src/previsualizacion.ts` | `calcularPrevistas(estado)`: la rejilla proyectada y los granos previstos por celda. `calcularPrevistasConCandidata(estado, indice, celda)`: lo mismo con una colocación hipotética más, y aparte lo que añade solo ella. | Sí |
 | `src/disposicion.ts` | `disponer(ancho, alto, lado)`: la geometría de las bandas y de cada celda. `disponerMano(ventana, n)`: las fichas, la descripción y los botones. `celdaEn`, `fichaEn`, `botonConfirmarEn` y `botonDeshacerEn`: qué hay bajo un punto. | Sí |
@@ -117,7 +127,9 @@ Mientras se anima, las celdas se dibujan con el color de su carga (aunque tengan
 
 **Disposición.** La ventana se reparte en tres bandas horizontales: indicadores arriba, tablero en el centro y mano abajo. El tablero es el mayor cuadrado que cabe en la banda central menos un margen. Las celdas son cuadradas e iguales, con un hueco proporcional a su tamaño, y el conjunto queda centrado. Así cabe en cualquier forma de ventana: ancha, estrecha o muy pequeña. Con una ventana de tamaño 0 las celdas miden 0, nunca NaN. Las celdas se indexan `celdas[y][x]`, igual que la rejilla del núcleo.
 
-En la banda inferior, los botones van a la derecha, apilados en el alto de la fila de fichas: Confirmar arriba y Deshacer abajo, con el mismo ancho, limitado por el de la banda y por su alto. La fila de fichas se centra en la banda y deja a la izquierda el mismo espacio libre que ocupan los botones a la derecha, para quedar centrada sin tocarlos. El radio de las fichas es el mayor que cabe con cualquier número de fichas (de 1 a 12) y cualquier ventana; la descripción va debajo. `celdaEn`, `botonConfirmarEn` y `botonDeshacerEn` usan los mismos rectángulos que se dibujan: los huecos entre celdas y lo que queda fuera del tablero no son ninguna celda.
+En la banda inferior, los botones van a la derecha, apilados en el alto de la fila de fichas: Confirmar arriba y Deshacer abajo, con el mismo ancho, limitado por el de la banda y por su alto. La fila de fichas se centra en la banda y deja a la izquierda el mismo espacio libre que ocupan los botones a la derecha, para quedar centrada sin tocarlos. El radio de las fichas es el mayor que cabe con cualquier número de fichas (de 1 a 12) y cualquier ventana; la descripción va debajo. `celdaEn`, `botonConfirmarEn` y `botonDeshacerEn` usan los mismos rectángulos que se dibujan: los huecos entre celdas y lo que queda fuera del tablero no son ninguna celda. `disponerMazo(ventana)` da el texto del mazo en el hueco libre de la izquierda de la fila de fichas, del mismo ancho que los botones, así que no pisa las fichas, los botones ni la línea de información.
+
+La banda superior (`disponerIndicadores(ventana)`) tiene dos filas, con los anchos como fracciones de la banda para que todo quepa sin solaparse con cualquier ventana. Arriba: la semilla y el lado (27 %), la etiqueta de cadena (57 %) y el ritmo (16 %). Abajo: la barra del medidor (56 %), su texto «P / M» (22 %) y las fichas de tiradas (22 %, colocadas con `disponerFichasTiradas`).
 
 **Celdas.** Cada celda es un rectángulo redondeado con un color según su carga (0 a 3; una carga mayor pero estable usa el de 3). Una celda con `umbral` granos o más se marca como inestable y usa su propio color. Fuera de una animación no debería verse ninguna, porque el núcleo siempre deja la rejilla estable.
 
@@ -172,7 +184,8 @@ Todo el aspecto vive en `src/tema.ts`, en el objeto `TEMA`:
 - **`animacion`:** duraciones base de los pasos (adición 300 ms, alerta 160 ms, derrumbe 320 ms), curva de aceleración del vuelo (`lineal`, `entradaSalidaCuadratica` o `entradaSalidaCubica`), pulsos y opacidad del parpadeo, distancia que recorren los granos que salen (1,1 celdas) y tramo final en que se desvanecen, aumento de las celdas que reciben granos, y radio, relleno y contorno de los granos en vuelo.
 - **`animacion.aceleracion`:** `razon` (0,9) y `minimo` (0,4) de la aceleración progresiva.
 - **`animacion.popups`:** relleno amarillo `#FFE600` y contorno oscuro `#0A0420` de los puntos flotantes, tamaño del texto relativo a la celda (0,3), distancia al borde (0,3 celdas), ascenso (0,5 celdas), tramo final en que se desvanecen (0,4) y crecimiento por oleada (0,15) con su tope (2).
-- **`bandaSuperior`:** margen lateral, tamaño y colores de la etiqueta de cadena (`#F5F0FF`, con el multiplicador en `#FFE600`) y tamaño y color del texto de ritmo (`#B8AEE0`).
+- **`bandaSuperior`:** tamaño y colores de la etiqueta de cadena (`#F5F0FF`, con el multiplicador en `#FFE600`) y tamaño y color del texto de ritmo (`#B8AEE0`), relativos al alto de su rectángulo.
+- **`indicadores`:** margen de la banda superior; el medidor (barra `#22144D`, relleno por tramos `#00E5FF`, `#FFE600` y `#FF2E93`, texto `#F5F0FF` y constante del suavizado, 180 ms); las fichas de tiradas (llenas `#F5F0FF`, vacías con contorno `#6F6596`); el texto del mazo (`#B8AEE0`); y el contorno de celda cargada (`#F5F0FF`, la mitad del hueco entre celdas, opacidad de 0,5 a 1 con un período de 1200 ms).
 - **`finDeRonda`:** tamaño del texto central del final de ronda y opacidad del velo.
 
 Los ritmos permitidos están en `RITMOS`, en `src/ritmo.ts`.
@@ -197,7 +210,9 @@ Los colores son provisionales: el arte definitivo sustituirá el tema sin tocar 
 - los granos en vuelo contra el fondo y contra cada color de celda: en el peor caso, el relleno o el contorno llega a 3;
 - el botón Confirmar activo contra el fondo y su texto: al menos 4,5;
 - el relleno de los puntos flotantes contra el fondo: al menos 4,5; con su contorno, contra cada color de celda: en el peor caso, 3;
-- la etiqueta de cadena (y su multiplicador resaltado) contra el fondo: al menos 7; el texto de ritmo: al menos 4,5.
+- la etiqueta de cadena (y su multiplicador resaltado) contra el fondo: al menos 7; el texto de ritmo: al menos 4,5;
+- cada relleno del medidor contra la barra: al menos 3; la barra contra el fondo: al menos 1,2; los textos del medidor y del mazo contra el fondo: al menos 4,5; las fichas de tiradas contra el fondo: al menos 3;
+- el contorno de celda cargada contra la celda de carga 3 y contra el fondo: al menos 3; y, en el punto más tenue del pulso, mezclado sobre el fondo donde se dibuja, también 3.
 
 ## Reglas de importación
 

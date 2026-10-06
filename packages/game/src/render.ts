@@ -15,9 +15,29 @@ import {
   seleccionar,
 } from './controlador.ts';
 import type { ErrorControlador, EstadoInterfaz, PasoInterfaz } from './controlador.ts';
-import { botonConfirmarEn, botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from './disposicion.ts';
-import type { Disposicion, DisposicionMano, Punto, Rect } from './disposicion.ts';
+import {
+  botonConfirmarEn,
+  botonDeshacerEn,
+  celdaEn,
+  disponer,
+  disponerFichasTiradas,
+  disponerIndicadores,
+  disponerMano,
+  disponerMazo,
+  fichaEn,
+} from './disposicion.ts';
+import type { Disposicion, DisposicionIndicadores, DisposicionMano, Punto, Rect } from './disposicion.ts';
 import { accionDeTecla } from './entrada.ts';
+import {
+  colorMedidor,
+  describirIndicadores,
+  fichasTiradas,
+  intensidadPulso,
+  proporcionMedidor,
+  puntosMostrados,
+  suavizar,
+} from './indicadores.ts';
+import type { Indicadores } from './indicadores.ts';
 import { LADO_MAXIMO } from './parametros.ts';
 import { calcularPrevistasConCandidata } from './previsualizacion.ts';
 import { avanzar, crearReproductor, cuadroActual, saltar, terminado } from './reproductor.ts';
@@ -25,7 +45,7 @@ import type { Reproductor } from './reproductor.ts';
 import { RITMO_POR_DEFECTO, formatearRitmo, siguienteRitmo } from './ritmo.ts';
 import { TEMA } from './tema.ts';
 import type { AspectoBoton } from './tema.ts';
-import { TEXTOS, describirError, describirFinDeRonda, describirGrano, formatearPuntos } from './textos.ts';
+import { TEXTOS, describirError, describirFinDeRonda, describirGrano, formatearPuntos, lineasMazo } from './textos.ts';
 import { PATRONES_GRANOS, describirCeldas } from './vista.ts';
 import type { CeldaDescrita } from './vista.ts';
 
@@ -62,14 +82,16 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   });
   contenedor.appendChild(app.canvas);
 
-  // Capas: el tablero se redibuja en cada cuadro de una cascada; la mano y el final de ronda, solo al cambiar el
-  // estado; los puntos flotantes y la banda superior son objetos persistentes que se actualizan.
+  // Capas: el tablero se redibuja en cada cuadro de una cascada; la mano, el mazo, el contorno de las celdas
+  // cargadas y el final de ronda, solo al cambiar el estado; los puntos flotantes y la banda superior (con el
+  // medidor y las tiradas) son objetos persistentes que se actualizan en cada cuadro.
   const capaTablero = new Container();
+  const capaCargadas = new Container();
   const capaMano = new Container();
   const capaPopups = new Container();
   const capaFin = new Container();
   const bandaSuperior = crearBandaSuperior();
-  app.stage.addChild(capaTablero, capaMano, capaPopups, capaFin, bandaSuperior.contenedor);
+  app.stage.addChild(capaTablero, capaCargadas, capaMano, capaPopups, capaFin, bandaSuperior.contenedor);
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen;
   const mostrarPopups = crearReservaPopups(capaPopups, MAXIMO_POPUPS);
@@ -84,16 +106,40 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   /** Cascada que se está reproduciendo; mientras exista, la interacción está bloqueada. */
   let animacion: Animacion | null = null;
   let ritmo = ritmoInicial;
+  /** Puntos que muestra el relleno del medidor, suavizados hacia `puntosMostrados`. */
+  let medidor = 0;
+  /** Tiempo de reloj acumulado por el ticker, para el pulso de las celdas cargadas. */
+  let reloj = 0;
+  let indicadores: DisposicionIndicadores | undefined;
 
   const vaciar = (capa: Container): void => {
     for (const hijo of capa.removeChildren()) hijo.destroy({ children: true });
   };
 
+  /** Puntos que debe mostrar el medidor: durante una cascada suben al terminar cada oleada. */
+  const objetivoMedidor = (): number => {
+    if (ui === undefined) return 0;
+    const cuadro = animacion === null ? null : cuadroActual(animacion.rep);
+    return puntosMostrados(ui.estado.puntos, cuadro, ui.estado.puntos);
+  };
+
+  /**
+   * Indicadores que se muestran. Durante una cascada, las tiradas ya vienen descontadas del estado nuevo; el mazo es el
+   * del estado de antes, coherente con la mano confirmada que sigue a la vista.
+   */
+  const indicadoresActuales = (): Indicadores | undefined => {
+    if (ui === undefined) return undefined;
+    const base = describirIndicadores(ui.estado, objetivoMedidor());
+    if (animacion === null) return base;
+    return { ...base, tiradas: describirIndicadores(animacion.final.estado).tiradas };
+  };
+
   /** Actualiza la banda superior y, durante una cascada, el tablero y los puntos flotantes con el cuadro actual. */
   const dibujarCuadroActual = (): void => {
-    if (ui === undefined || tablero === undefined) return;
+    const info = indicadoresActuales();
+    if (ui === undefined || tablero === undefined || indicadores === undefined || info === undefined) return;
     const cuadro = animacion === null ? null : cuadroActual(animacion.rep);
-    bandaSuperior.actualizar(tablero.bandaSuperior, semilla, ui.estado.config.lado, ritmo, cuadro);
+    bandaSuperior.actualizar(indicadores, semilla, ui.estado.config.lado, ritmo, cuadro, info, medidor);
     if (cuadro === null) {
       mostrarPopups([], tablero);
       return;
@@ -112,6 +158,9 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
     const ventana = { ancho: app.screen.width, alto: app.screen.height };
     tablero = disponer(ventana.ancho, ventana.alto, estado.config.lado);
     mano = disponerMano(ventana, estado.mano.length);
+    indicadores = disponerIndicadores(ventana);
+    vaciar(capaCargadas);
+    capaMano.addChild(dibujarMazo(disponerMazo(ventana), describirIndicadores(estado).mazo));
 
     if (animacion !== null) {
       // Durante la cascada se ve la mano que se confirmó, atenuada y sin botones activos.
@@ -123,6 +172,8 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
     }
 
     capaTablero.addChild(dibujarTablero(tablero, ui, enJuego(estado) ? celdaRaton : null));
+    // Las celdas a un grano de caer, solo mientras se coloca: su contorno pulsa con el ticker.
+    if (enJuego(estado)) capaCargadas.addChild(dibujarCargadas(tablero, describirCeldas(estado.celdas, estado.config.umbral)));
     const seleccionado = ui.seleccionado === null ? undefined : estado.mano[ui.seleccionado];
     const linea = mensaje ?? (seleccionado === undefined ? TEXTOS.manoCompleta : describirGrano(seleccionado.tipo));
     capaMano.addChild(
@@ -192,10 +243,16 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   };
 
   app.ticker.add((ticker: Ticker) => {
-    if (animacion === null) return;
-    animacion = { ...animacion, rep: avanzar(animacion.rep, ticker.deltaMS, ritmo) };
-    if (terminado(animacion.rep)) terminarAnimacion();
-    else dibujarCuadroActual();
+    reloj += ticker.deltaMS;
+    const { cargada, medidor: estiloMedidor } = TEMA.indicadores;
+    capaCargadas.alpha = cargada.alfaMinima + (cargada.alfaMaxima - cargada.alfaMinima) * intensidadPulso(reloj, cargada.periodoMs);
+    if (animacion !== null) {
+      animacion = { ...animacion, rep: avanzar(animacion.rep, ticker.deltaMS, ritmo) };
+      if (terminado(animacion.rep)) terminarAnimacion();
+    }
+    // El relleno del medidor se acerca a su objetivo al ritmo de la animación.
+    medidor = suavizar(medidor, objetivoMedidor(), ticker.deltaMS * ritmo, estiloMedidor.constanteMs);
+    dibujarCuadroActual();
   });
 
   /** Si el punto cae sobre algo que responde a un clic, para el cursor de mano. */
@@ -279,6 +336,7 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
       ui = iniciarControlador(estado);
       animacion = null;
       mensaje = null;
+      medidor = estado.puntos;
       dibujar();
     },
   };
@@ -294,12 +352,19 @@ function tamanoQueCabe(texto: string, ancho: number, maximo: number): number {
   return Math.max(1, Math.min(maximo, ancho / (Math.max(1, texto.length) * 0.58)));
 }
 
+/** Coloca un texto con el tamaño que cabe en `r` (sin pasar de `fraccion` de su alto) y lo devuelve. */
+function encajar(t: Text, valor: string, r: Rect, fraccion: number): void {
+  fijar(t, 'text', valor);
+  fijar(t.style, 'fontSize', tamanoQueCabe(valor, r.ancho, r.alto * fraccion));
+}
+
 /**
- * Banda superior con textos persistentes: la semilla y el lado a la izquierda, la etiqueta de cadena «Oleada k · ×m ·
- * +P» centrada (solo durante una cascada, con el multiplicador resaltado) y el ritmo a la derecha, siempre visible.
+ * Banda superior con objetos persistentes. Arriba: la semilla y el lado a la izquierda, la etiqueta de cadena
+ * «Oleada k · ×m · +P» centrada (solo durante una cascada, con el multiplicador resaltado) y el ritmo a la derecha.
+ * Abajo: la barra del medidor con su relleno, su texto «P / M» a la derecha y las fichas de tiradas.
  */
 function crearBandaSuperior() {
-  const { colores, tipografia, bandaSuperior: estilo } = TEMA;
+  const { colores, tipografia, bandaSuperior: estilo, indicadores: estiloIndicadores } = TEMA;
   const contenedor = new Container();
   const texto = (color: number, peso: 'normal' | 'bold'): Text =>
     new Text({ text: '', style: { fontFamily: tipografia.familia, fontWeight: peso, fontSize: 12, fill: color } });
@@ -308,24 +373,57 @@ function crearBandaSuperior() {
   const multiplicador = texto(estilo.etiqueta.resaltado, 'bold');
   const puntos = texto(estilo.etiqueta.color, 'bold');
   const ritmo = texto(estilo.ritmo.color, 'normal');
+  const textoMedidor = texto(estiloIndicadores.medidor.texto, 'bold');
+  const barra = new Graphics();
+  const relleno = new Graphics();
+  const tiradas = new Graphics();
   informacion.anchor.set(0, 0.5);
-  for (const t of [oleada, multiplicador, puntos]) t.anchor.set(0, 0.5);
+  for (const t of [oleada, multiplicador, puntos, textoMedidor]) t.anchor.set(0, 0.5);
   ritmo.anchor.set(1, 0.5);
-  contenedor.addChild(informacion, oleada, multiplicador, puntos, ritmo);
+  contenedor.addChild(barra, relleno, tiradas, informacion, oleada, multiplicador, puntos, ritmo, textoMedidor);
 
-  const actualizar = (banda: Rect, semilla: number, lado: number, valorRitmo: number, cuadro: Cuadro | null): void => {
-    const margen = banda.ancho * estilo.margen;
-    const centroY = banda.y + banda.alto / 2;
+  const actualizar = (
+    d: DisposicionIndicadores,
+    semilla: number,
+    lado: number,
+    valorRitmo: number,
+    cuadro: Cuadro | null,
+    info: Indicadores,
+    puntosRelleno: number,
+  ): void => {
+    const centro = (r: Rect): number => r.y + r.alto / 2;
 
-    const textoInfo = TEXTOS.informacion(semilla, lado);
-    fijar(informacion, 'text', textoInfo);
-    fijar(informacion.style, 'fontSize', tamanoQueCabe(textoInfo, banda.ancho * 0.28, banda.alto * TEMA.proporciones.textoInformacion));
-    informacion.position.set(banda.x + margen, centroY);
+    encajar(informacion, TEXTOS.informacion(semilla, lado), d.semilla, 0.62);
+    informacion.position.set(d.semilla.x, centro(d.semilla));
+    encajar(ritmo, TEXTOS.ritmo(formatearRitmo(valorRitmo)), d.ritmo, estilo.ritmo.tamano);
+    ritmo.position.set(d.ritmo.x + d.ritmo.ancho, centro(d.ritmo));
 
-    const textoRitmo = TEXTOS.ritmo(formatearRitmo(valorRitmo));
-    fijar(ritmo, 'text', textoRitmo);
-    fijar(ritmo.style, 'fontSize', tamanoQueCabe(textoRitmo, banda.ancho * 0.16, banda.alto * estilo.ritmo.tamano));
-    ritmo.position.set(banda.x + banda.ancho - margen, centroY);
+    // Medidor: fondo de la barra, relleno según los puntos suavizados y texto «P / M» fuera de la barra.
+    const b = d.barra;
+    const radio = b.alto / 2;
+    barra.clear();
+    relleno.clear();
+    if (b.ancho > 0 && b.alto > 0) {
+      barra.roundRect(b.x, b.y, b.ancho, b.alto, radio).fill(estiloIndicadores.medidor.barra);
+      const proporcion = proporcionMedidor(puntosRelleno, info.medidor.meta);
+      const ancho = b.ancho * proporcion;
+      if (ancho > 0) relleno.roundRect(b.x, b.y, ancho, b.alto, Math.min(radio, ancho / 2)).fill(colorMedidor(proporcion));
+    }
+    encajar(textoMedidor, info.medidor.texto, d.textoMedidor, 0.8);
+    textoMedidor.position.set(d.textoMedidor.x, centro(d.textoMedidor));
+
+    // Tiradas: llenas las que quedan; las gastadas, solo el contorno.
+    tiradas.clear();
+    const llenas = fichasTiradas(info.tiradas);
+    const { llena, vacia, grosorVacia } = estiloIndicadores.tiradas;
+    for (const [i, f] of disponerFichasTiradas(d.tiradas, llenas.length).entries()) {
+      if (f.radio <= 0) continue;
+      if (llenas[i] === true) tiradas.circle(f.x, f.y, f.radio).fill(llena);
+      else {
+        const w = f.radio * grosorVacia;
+        tiradas.circle(f.x, f.y, f.radio - w / 2).stroke({ width: w, color: vacia });
+      }
+    }
 
     const etiqueta: Etiqueta | null = cuadro?.etiqueta ?? null;
     for (const t of [oleada, multiplicador, puntos]) t.visible = etiqueta !== null;
@@ -336,19 +434,61 @@ function crearBandaSuperior() {
       [puntos, TEXTOS.puntosDeTirada(formatearPuntos(cuadro.puntosTirada))],
     ];
     const completo = partes.map(([, t]) => t).join('');
-    const tamano = tamanoQueCabe(completo, banda.ancho * 0.48, banda.alto * estilo.etiqueta.tamano);
+    const tamano = tamanoQueCabe(completo, d.etiqueta.ancho, d.etiqueta.alto * estilo.etiqueta.tamano);
     for (const [t, valor] of partes) {
       fijar(t, 'text', valor);
       fijar(t.style, 'fontSize', tamano);
     }
-    // Las tres partes, una detrás de otra, centradas en conjunto.
-    let x = banda.x + banda.ancho / 2 - partes.reduce((suma, [t]) => suma + t.width, 0) / 2;
+    // Las tres partes, una detrás de otra, centradas en conjunto en su rectángulo.
+    let x = d.etiqueta.x + d.etiqueta.ancho / 2 - partes.reduce((suma, [t]) => suma + t.width, 0) / 2;
     for (const [t] of partes) {
-      t.position.set(x, centroY);
+      t.position.set(x, centro(d.etiqueta));
       x += t.width;
     }
   };
   return { contenedor, actualizar };
+}
+
+/** Texto del mazo en su rectángulo, una línea por recuento («Mazo 17», «Normal 12»…). */
+function dibujarMazo(r: Rect, mazo: Indicadores['mazo']): Container {
+  const { tipografia, indicadores } = TEMA;
+  const contenedor = new Container();
+  if (r.ancho <= 0 || r.alto <= 0) return contenedor;
+  const lineas = lineasMazo(mazo);
+  const larga = lineas.reduce((a, l) => (l.length > a.length ? l : a), '');
+  const t = new Text({
+    text: lineas.join('\n'),
+    style: {
+      fontFamily: tipografia.familia,
+      fontSize: tamanoQueCabe(larga, r.ancho, r.alto / (lineas.length * 1.3)),
+      fill: indicadores.mazo.texto,
+      lineHeight: (r.alto / lineas.length) * 0.95,
+    },
+  });
+  t.anchor.set(0, 0.5);
+  t.position.set(r.x, r.y + r.alto / 2);
+  contenedor.addChild(t);
+  return contenedor;
+}
+
+/**
+ * Contorno de las celdas cargadas (a un grano de caer), por fuera de la celda, en el hueco: así se distingue sobre
+ * el fondo y no tapa los puntos. La opacidad de la capa pulsa con el ticker.
+ */
+function dibujarCargadas(d: Disposicion, celdas: readonly CeldaDescrita[]): Graphics {
+  const { proporciones, indicadores } = TEMA;
+  const g = new Graphics();
+  if (d.celda <= 0) return g;
+  const w = d.hueco * indicadores.cargada.grosor;
+  for (const c of celdas) {
+    const r = d.celdas[c.y]?.[c.x];
+    if (!c.cargada || r === undefined || w <= 0) continue;
+    g.roundRect(r.x - w / 2, r.y - w / 2, r.ancho + w, r.alto + w, r.ancho * proporciones.radioCelda + w / 2).stroke({
+      width: w,
+      color: indicadores.cargada.color,
+    });
+  }
+  return g;
 }
 
 /**

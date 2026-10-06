@@ -170,18 +170,46 @@ export type Tema = {
       readonly escalaMaxima: number;
     };
   };
-  /** Banda superior: la etiqueta de cadena (centrada) y el ritmo (a la derecha). La semilla va a la izquierda. */
+  /** Banda superior: la etiqueta de cadena y el ritmo. Su disposición la da `disponerIndicadores`. */
   readonly bandaSuperior: {
-    /** Margen lateral, como fracción del ancho de la banda. */
-    readonly margen: number;
     readonly etiqueta: {
-      /** Tamaño del texto, como fracción del alto de la banda. */
+      /** Tamaño del texto, como fracción del alto de su rectángulo (ver `disponerIndicadores`). */
       readonly tamano: number;
       readonly color: number;
       /** Color del multiplicador, resaltado. */
       readonly resaltado: number;
     };
+    /** Tamaño como fracción del alto de su rectángulo, y color. */
     readonly ritmo: { readonly tamano: number; readonly color: number };
+  };
+  /** Indicadores de la ronda: medidor de desborde, tiradas, mazo y celdas cargadas. */
+  readonly indicadores: {
+    /** Margen interior de la banda superior, como fracción del menor de sus lados. */
+    readonly margen: number;
+    readonly medidor: {
+      /** Fondo de la barra. */
+      readonly barra: number;
+      /** Relleno por tramos: menos de la mitad, de la mitad a la meta, y meta alcanzada. */
+      readonly relleno: { readonly bajo: number; readonly medio: number; readonly lleno: number };
+      /** Texto «P / M», fuera de la barra. */
+      readonly texto: number;
+      /** Constante de tiempo del suavizado del relleno, en milisegundos al ritmo 1. */
+      readonly constanteMs: number;
+    };
+    /** Fichas de tiradas: llenas las que quedan; vacías (solo contorno) las gastadas. */
+    readonly tiradas: { readonly llena: number; readonly vacia: number; readonly grosorVacia: number };
+    readonly mazo: { readonly texto: number };
+    /**
+     * Contorno de las celdas a un grano de caer, por fuera de la celda (en el hueco): color, grosor como fracción
+     * del hueco entre celdas, y opacidad que pulsa entre `alfaMinima` y `alfaMaxima` con el período dado.
+     */
+    readonly cargada: {
+      readonly color: number;
+      readonly grosor: number;
+      readonly periodoMs: number;
+      readonly alfaMinima: number;
+      readonly alfaMaxima: number;
+    };
   };
   /** Texto central del final de ronda, como fracción del lado del tablero. */
   readonly finDeRonda: { readonly titulo: number; readonly nota: number; readonly velo: number };
@@ -273,9 +301,20 @@ export const TEMA: Tema = {
     },
   },
   bandaSuperior: {
-    margen: 0.02,
-    etiqueta: { tamano: 0.4, color: 0xf5f0ff, resaltado: 0xffe600 },
-    ritmo: { tamano: 0.22, color: 0xb8aee0 },
+    etiqueta: { tamano: 0.85, color: 0xf5f0ff, resaltado: 0xffe600 },
+    ritmo: { tamano: 0.6, color: 0xb8aee0 },
+  },
+  indicadores: {
+    margen: 0.08,
+    medidor: {
+      barra: 0x22144d,
+      relleno: { bajo: 0x00e5ff, medio: 0xffe600, lleno: 0xff2e93 },
+      texto: 0xf5f0ff,
+      constanteMs: 180,
+    },
+    tiradas: { llena: 0xf5f0ff, vacia: 0x6f6596, grosorVacia: 0.25 },
+    mazo: { texto: 0xb8aee0 },
+    cargada: { color: 0xf5f0ff, grosor: 0.5, periodoMs: 1200, alfaMinima: 0.5, alfaMaxima: 1 },
   },
   finDeRonda: { titulo: 0.09, nota: 0.045, velo: 0.82 },
   tipografia: {

@@ -19,8 +19,9 @@ describe('accionDeTecla', () => {
     expect(tecla(t)).toEqual({ tipo: 'deshacer' });
   });
 
-  it('+ sube el ritmo y - lo baja', () => {
+  it('+ (o su alias =) sube el ritmo y - lo baja', () => {
     expect(tecla('+')).toEqual({ tipo: 'ritmo', direccion: 1 });
+    expect(tecla('=')).toEqual({ tipo: 'ritmo', direccion: 1 });
     expect(tecla('-')).toEqual({ tipo: 'ritmo', direccion: -1 });
   });
 
@@ -28,7 +29,7 @@ describe('accionDeTecla', () => {
     expect(tecla(t)).toEqual({ tipo: 'aceptar' });
   });
 
-  it.each(['0', 'a', 'x', 'Tab', 'Spacebar', '=', '_', '*', 'ArrowUp', 'ArrowDown', 'Escape', 'Delete', '10', 'F1', ''])(
+  it.each(['0', 'a', 'x', 'Tab', 'Spacebar', '_', '*', 'ArrowUp', 'ArrowDown', 'Escape', 'Delete', '10', 'F1', ''])(
     'la tecla «%s» no está mapeada',
     (t) => {
       expect(tecla(t)).toBeNull();
@@ -41,7 +42,7 @@ describe('accionDeTecla', () => {
     { ctrl: false, alt: false, meta: true },
     { ctrl: true, alt: true, meta: true },
   ])('con modificadores %o ninguna tecla hace nada', (mods) => {
-    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace', 'Enter', ' ', '+', '-']) {
+    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace', 'Enter', ' ', '+', '=', '-']) {
       expect(accionDeTecla({ tecla: t, ...mods })).toBeNull();
     }
   });

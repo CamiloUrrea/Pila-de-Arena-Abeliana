@@ -11,7 +11,10 @@ import {
   describirError,
   describirFinDeRonda,
   describirGrano,
+  describirMazo,
+  describirTiradas,
   formatearPuntos,
+  lineasMazo,
 } from '../src/textos.ts';
 
 describe('describirGrano', () => {
@@ -179,5 +182,38 @@ describe('describirFinDeRonda', () => {
       '5234,5',
     ]);
     expect(formatearPuntos(-150)).toBe('−1,5');
+  });
+});
+
+describe('describirMazo y describirTiradas', () => {
+  it('el mazo con sus recuentos por tipo, con los nombres generados de los datos', () => {
+    expect(describirMazo({ total: 17, porTipo: { normal: 12, pesado: 3, explosivo: 2 } })).toBe(
+      'Mazo 17 · Normal 12 · Pesado 3 · Explosivo 2',
+    );
+    expect(describirMazo({ total: 0, porTipo: { normal: 0, pesado: 0, explosivo: 0 } })).toBe(
+      'Mazo 0 · Normal 0 · Pesado 0 · Explosivo 0',
+    );
+    expect(lineasMazo({ total: 4, porTipo: { normal: 0, pesado: 4, explosivo: 0 } })).toEqual([
+      'Mazo 4',
+      'Normal 0',
+      'Pesado 4',
+      'Explosivo 0',
+    ]);
+  });
+
+  it('los nombres del mazo coinciden con los de describirGrano', () => {
+    for (const tipo of ['normal', 'pesado', 'explosivo'] as const) {
+      const nombre = describirGrano(tipo).split(':')[0];
+      expect(describirMazo({ total: 1, porTipo: { normal: 0, pesado: 0, explosivo: 0, [tipo]: 1 } })).toContain(`${nombre} 1`);
+    }
+  });
+
+  it.each<[number, number, string]>([
+    [5, 5, 'Tiradas 5/5'],
+    [5, 3, 'Tiradas 3/5'],
+    [5, 0, 'Tiradas 0/5'],
+    [1, 1, 'Tiradas 1/1'],
+  ])('tiradas %i con %i restantes: «%s»', (total, restantes, texto) => {
+    expect(describirTiradas({ total, restantes })).toBe(texto);
   });
 });

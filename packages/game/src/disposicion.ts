@@ -97,17 +97,23 @@ export function disponer(ancho: number, alto: number, lado: number, tema: Tema =
  * debajo. Las fichas se escalan para caber con cualquier número y
  * cualquier forma de ventana; una ventana degenerada da tamaños 0, nunca NaN.
  */
-export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tema = TEMA): DisposicionMano {
+/** Medidas comunes de la banda inferior, para la mano y para el mazo. */
+function geometriaInferior(ventana: Ventana, tema: Tema) {
   const banda = repartirBandas(ventana.ancho, ventana.alto, tema).bandaInferior;
   const p = tema.mano;
-  const n = Number.isInteger(numeroDeGranos) && numeroDeGranos > 0 ? numeroDeGranos : 0;
-
   const margen = Math.min(banda.ancho, banda.alto) * p.margen;
   const altoUtil = Math.max(0, banda.alto - 2 * margen);
   const altoFila = altoUtil * p.fila;
   const centroFila = banda.y + margen + altoFila / 2;
-
   const anchoBoton = Math.max(0, Math.min(banda.ancho * p.anchoBoton, altoUtil * p.anchoBotonPorAlto));
+  return { banda, margen, altoUtil, altoFila, centroFila, anchoBoton };
+}
+
+export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tema = TEMA): DisposicionMano {
+  const { banda, margen, altoUtil, altoFila, centroFila, anchoBoton } = geometriaInferior(ventana, tema);
+  const p = tema.mano;
+  const n = Number.isInteger(numeroDeGranos) && numeroDeGranos > 0 ? numeroDeGranos : 0;
+
   const separacion = altoFila * p.separacionBotones;
   const altoBoton = Math.max(0, Math.min(anchoBoton * p.altoBoton, (altoFila - separacion) / 2));
   const xBoton = banda.x + banda.ancho - margen - anchoBoton;
@@ -129,6 +135,87 @@ export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tem
     alto: altoUtil - altoFila,
   };
   return { banda, fichas, descripcion, confirmar, deshacer };
+}
+
+/**
+ * Texto del mazo en la banda inferior: el hueco de la izquierda de la fila de fichas, del mismo ancho que los botones
+ * de la derecha (la fila de fichas deja ese espacio libre a cada lado para quedar centrada). Así no pisa las fichas,
+ * los botones ni la línea de información, con cualquier número de fichas.
+ */
+export function disponerMazo(ventana: Ventana, tema: Tema = TEMA): Rect {
+  const { banda, margen, altoFila, anchoBoton } = geometriaInferior(ventana, tema);
+  return { x: banda.x + margen, y: banda.y + margen, ancho: anchoBoton, alto: altoFila };
+}
+
+export type DisposicionIndicadores = {
+  readonly banda: Rect;
+  /** Fila de arriba: semilla y lado (izquierda), etiqueta de cadena (centro) y ritmo (derecha). */
+  readonly semilla: Rect;
+  readonly etiqueta: Rect;
+  readonly ritmo: Rect;
+  /** Fila de abajo: la barra del medidor, su texto «P / M» a la derecha (fuera de la barra) y las tiradas. */
+  readonly barra: Rect;
+  readonly textoMedidor: Rect;
+  readonly tiradas: Rect;
+};
+
+/**
+ * Dispone la banda superior en dos filas sin solapes: arriba, la semilla, la etiqueta de cadena y el ritmo; abajo,
+ * la barra del medidor, su texto y las fichas de tiradas. Los anchos son fracciones de la banda, así que todo escala
+ * con cualquier forma de ventana; una ventana degenerada da tamaños 0, nunca NaN.
+ */
+export function disponerIndicadores(ventana: Ventana, tema: Tema = TEMA): DisposicionIndicadores {
+  const banda = repartirBandas(ventana.ancho, ventana.alto, tema).bandaSuperior;
+  const margen = Math.min(banda.ancho, banda.alto) * tema.indicadores.margen;
+  const x0 = banda.x + margen;
+  const ancho = Math.max(0, banda.ancho - 2 * margen);
+  const alto = Math.max(0, banda.alto - 2 * margen);
+  const hueco = ancho * 0.02;
+  const huecoFilas = alto * 0.08;
+  const altoArriba = alto * 0.52;
+  const yAbajo = banda.y + margen + altoArriba + huecoFilas;
+  const altoAbajo = Math.max(0, alto - altoArriba - huecoFilas);
+  const yArriba = banda.y + margen;
+
+  // Columnas de cada fila, de izquierda a derecha, con un hueco entre ellas.
+  const columnas = (fracciones: readonly number[], y: number, altoFila: number): Rect[] => {
+    const util = Math.max(0, ancho - hueco * (fracciones.length - 1));
+    let x = x0;
+    return fracciones.map((f) => {
+      const r = { x, y, ancho: util * f, alto: altoFila };
+      x += util * f + hueco;
+      return r;
+    });
+  };
+  const [semilla, etiqueta, ritmo] = columnas([0.27, 0.57, 0.16], yArriba, altoArriba);
+  const [zonaBarra, textoMedidor, tiradas] = columnas([0.56, 0.22, 0.22], yAbajo, altoAbajo);
+  const vacio: Rect = { x: x0, y: yArriba, ancho: 0, alto: 0 };
+  // La barra ocupa el centro vertical de su zona, algo más baja que el texto.
+  const zona = zonaBarra ?? vacio;
+  const altoBarra = zona.alto * 0.6;
+  const barra: Rect = { x: zona.x, y: zona.y + (zona.alto - altoBarra) / 2, ancho: zona.ancho, alto: altoBarra };
+  return {
+    banda,
+    semilla: semilla ?? vacio,
+    etiqueta: etiqueta ?? vacio,
+    ritmo: ritmo ?? vacio,
+    barra,
+    textoMedidor: textoMedidor ?? vacio,
+    tiradas: tiradas ?? vacio,
+  };
+}
+
+/** Fichas de tiradas dentro de `area`: `n` círculos iguales en fila, centrados, sin solaparse. */
+export function disponerFichasTiradas(area: Rect, n: number): Ficha[] {
+  const total = Number.isInteger(n) && n > 0 ? n : 0;
+  if (total === 0) return [];
+  const hueco = 0.5;
+  // total · 2r + (total − 1) · hueco · 2r = ancho, y 2r ≤ alto · 0,8.
+  const radio = Math.max(0, Math.min((area.alto * 0.8) / 2, area.ancho / (2 * total + 2 * (total - 1) * hueco)));
+  const paso = 2 * radio * (1 + hueco);
+  const centro = area.x + area.ancho / 2;
+  const y = area.y + area.alto / 2;
+  return Array.from({ length: total }, (_, i) => ({ x: centro + (i - (total - 1) / 2) * paso, y, radio }));
 }
 
 const contiene = (r: Rect, p: Punto): boolean => p.x >= r.x && p.x < r.x + r.ancho && p.y >= r.y && p.y < r.y + r.alto;

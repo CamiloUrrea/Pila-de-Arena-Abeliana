@@ -219,3 +219,40 @@ describe('integración con @pila/core', () => {
     }
   });
 });
+
+describe('celdas cargadas', () => {
+  it('con umbral 4, solo la carga 3 está cargada; nunca de 0 a 2 ni de 4 en adelante', () => {
+    const d = describirCeldas([[0, 1, 2, 3, 4, 5, 9]], 4);
+    expect(d.map((c) => c.cargada)).toEqual([false, false, false, true, false, false, false]);
+  });
+
+  it('con otro umbral se desplaza a umbral − 1', () => {
+    expect(describirCeldas([[1, 2, 3, 4, 5, 6]], 6).map((c) => c.cargada)).toEqual([false, false, false, false, true, false]);
+    expect(describirCeldas([[0, 1, 2]], 2).map((c) => c.cargada)).toEqual([false, true, false]);
+  });
+
+  it('nunca si umbral − 1 es menor que 1', () => {
+    expect(describirCeldas([[0, 1, 2]], 1).some((c) => c.cargada)).toBe(false);
+    expect(describirCeldas([[0, 1]], 0).some((c) => c.cargada)).toBe(false);
+  });
+
+  it('depende de la carga actual, no de la vista previa', () => {
+    const [c, e] = describirCeldas([[3, 2]], 4, [[2, 1]]);
+    expect(c?.cargada).toBe(true);
+    expect(e?.cargada).toBe(false);
+  });
+
+  it('propiedad: cargada sii la celda es estable y su carga es umbral − 1', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 8 }),
+        fc.array(fc.array(fc.integer({ min: 0, max: 12 }), { minLength: 3, maxLength: 3 }), { minLength: 3, maxLength: 3 }),
+        (umbral, celdas) => {
+          for (const c of describirCeldas(celdas, umbral)) {
+            expect(c.cargada).toBe(umbral >= 2 && c.carga === umbral - 1 && !c.inestable);
+          }
+        },
+      ),
+    );
+  });
+});

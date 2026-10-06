@@ -4,6 +4,7 @@ import { DEFINICIONES_GRANOS } from '@pila/core';
 import type { DefinicionGrano, Estado, MotivoIlegal, TipoGrano } from '@pila/core';
 import type { ErrorCascada } from './cascada.ts';
 import type { ErrorControlador } from './controlador.ts';
+import type { Indicadores } from './indicadores.ts';
 
 export const TEXTOS = {
   deshacer: 'Deshacer',
@@ -173,4 +174,23 @@ export function describirFinDeRonda(estado: Estado): string | null {
     case 'colocando':
       return null;
   }
+}
+
+/**
+ * Partes del texto del mazo: el total y el recuento de cada tipo, en el orden de los datos y con el nombre generado
+ * del tipo («Normal 12»). Solo recuentos: nunca el orden de robo.
+ */
+export function lineasMazo(mazo: Indicadores['mazo']): string[] {
+  const tipos = Object.entries(mazo.porTipo).map(([tipo, n]) => `${nombre(tipo)} ${n}`);
+  return [`Mazo ${mazo.total}`, ...tipos];
+}
+
+/** «Mazo 17 · Normal 12 · Pesado 3 · Explosivo 2». */
+export function describirMazo(mazo: Indicadores['mazo']): string {
+  return lineasMazo(mazo).join(' · ');
+}
+
+/** «Tiradas 3/5»: las restantes sobre el total. */
+export function describirTiradas({ total, restantes }: Indicadores['tiradas']): string {
+  return `Tiradas ${restantes}/${total}`;
 }

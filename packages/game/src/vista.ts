@@ -45,6 +45,8 @@ export type CeldaDescrita = {
   readonly inestablePrevista: boolean;
   /** Es inestable prevista solo por la candidata: sin ella, la proyección no llegaría a `umbral`. */
   readonly inestablePorCandidata: boolean;
+  /** Celda estable a un grano de caer: su carga es `umbral − 1` (nunca si `umbral − 1` es menor que 1). */
+  readonly cargada: boolean;
 };
 
 // Fila o columna exterior negativa (N) y positiva (P), en unidades del desplazamiento.
@@ -117,6 +119,7 @@ export function describirCeldas(
         inestable,
         inestablePrevista: !inestable && total >= umbral,
         inestablePorCandidata: !inestable && total >= umbral && total - candidatos < umbral,
+        cargada: !inestable && umbral - 1 >= 1 && carga === umbral - 1,
       };
     }),
   );

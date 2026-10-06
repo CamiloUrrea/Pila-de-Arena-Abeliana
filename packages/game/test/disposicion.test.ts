@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { botonConfirmarEn, botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from '../src/disposicion.ts';
+import {
+  botonConfirmarEn,
+  botonDeshacerEn,
+  celdaEn,
+  disponer,
+  disponerFichasTiradas,
+  disponerIndicadores,
+  disponerMano,
+  disponerMazo,
+  fichaEn,
+} from '../src/disposicion.ts';
 import type { Disposicion, Rect } from '../src/disposicion.ts';
 import { BANDAS_INICIALES, TEMA } from '../src/tema.ts';
 
@@ -321,5 +331,97 @@ describe('botonConfirmarEn', () => {
     expect(botonConfirmarEn(centro, d)).toBe(true);
     // El punto con los ejes intercambiados queda fuera de la ventana y del botón.
     expect(botonConfirmarEn({ x: centro.y, y: centro.x }, d)).toBe(false);
+  });
+});
+
+const dentroDe = (r: Rect, b: Rect): boolean =>
+  r.x >= b.x - EPS && r.y >= b.y - EPS && r.x + r.ancho <= b.x + b.ancho + EPS && r.y + r.alto <= b.y + b.alto + EPS;
+/** Dos rectángulos se solapan si comparten área (tocarse en un borde no cuenta). */
+const solapan = (a: Rect, b: Rect): boolean =>
+  a.x < b.x + b.ancho - EPS && b.x < a.x + a.ancho - EPS && a.y < b.y + b.alto - EPS && b.y < a.y + a.alto - EPS;
+const finito = (r: Rect): boolean => [r.x, r.y, r.ancho, r.alto].every(Number.isFinite);
+
+function comprobarIndicadores(ancho: number, alto: number): void {
+  const d = disponerIndicadores({ ancho, alto });
+  expect(d.banda).toEqual(disponer(ancho, alto, 1).bandaSuperior);
+  const piezas = [d.semilla, d.etiqueta, d.ritmo, d.barra, d.textoMedidor, d.tiradas];
+  for (const r of piezas) {
+    expect(finito(r)).toBe(true);
+    expect(r.ancho).toBeGreaterThan(0);
+    expect(r.alto).toBeGreaterThan(0);
+    expect(dentroDe(r, d.banda)).toBe(true);
+  }
+  for (const [i, a] of piezas.entries()) for (const b of piezas.slice(i + 1)) expect(solapan(a, b)).toBe(false);
+  // El texto del medidor va fuera de la barra.
+  expect(d.textoMedidor.x).toBeGreaterThanOrEqual(d.barra.x + d.barra.ancho - EPS);
+}
+
+function comprobarMazo(ancho: number, alto: number): void {
+  const m = disponerMazo({ ancho, alto });
+  const banda = disponer(ancho, alto, 1).bandaInferior;
+  expect(finito(m)).toBe(true);
+  expect(m.ancho).toBeGreaterThan(0);
+  expect(m.alto).toBeGreaterThan(0);
+  expect(dentroDe(m, banda)).toBe(true);
+  for (let n = 1; n <= 12; n++) {
+    const mano = disponerMano({ ancho, alto }, n);
+    expect(solapan(m, mano.confirmar)).toBe(false);
+    expect(solapan(m, mano.deshacer)).toBe(false);
+    expect(solapan(m, mano.descripcion)).toBe(false);
+    for (const f of mano.fichas) {
+      const caja = { x: f.x - f.radio, y: f.y - f.radio, ancho: 2 * f.radio, alto: 2 * f.radio };
+      expect(solapan(m, caja)).toBe(false);
+    }
+  }
+}
+
+describe('disposición de los indicadores y del mazo', () => {
+  for (const [ancho, alto] of VENTANAS) {
+    it(`ventana ${ancho}×${alto}: indicadores y mazo dentro de su banda y sin solaparse`, () => {
+      comprobarIndicadores(ancho, alto);
+      comprobarMazo(ancho, alto);
+    });
+  }
+
+  it('propiedad: con ventanas de 100 a 4000 en cada eje', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 100, max: 4000 }), fc.integer({ min: 100, max: 4000 }), (a, h) => {
+        comprobarIndicadores(a, h);
+        comprobarMazo(a, h);
+      }),
+    );
+  });
+
+  it.each<[number, number]>([
+    [0, 0],
+    [0, 800],
+    [800, 0],
+    [-5, 300],
+    [Number.NaN, 300],
+  ])('ventana degenerada %d×%d: sin NaN ni excepciones', (ancho, alto) => {
+    expect(JSON.stringify(disponerIndicadores({ ancho, alto }))).not.toContain('null');
+    expect(JSON.stringify(disponerMazo({ ancho, alto }))).not.toContain('null');
+    expect(JSON.stringify(disponerFichasTiradas(disponerIndicadores({ ancho, alto }).tiradas, 5))).not.toContain('null');
+  });
+
+  it('las fichas de tiradas caben en su área, centradas y sin solaparse', () => {
+    for (const [ancho, alto] of VENTANAS) {
+      const area = disponerIndicadores({ ancho, alto }).tiradas;
+      for (let n = 1; n <= 10; n++) {
+        const fichas = disponerFichasTiradas(area, n);
+        expect(fichas).toHaveLength(n);
+        for (const f of fichas) {
+          expect(f.radio).toBeGreaterThan(0);
+          expect(dentroDe({ x: f.x - f.radio, y: f.y - f.radio, ancho: 2 * f.radio, alto: 2 * f.radio }, area)).toBe(true);
+        }
+        for (const [i, a] of fichas.entries()) {
+          const b = fichas[i + 1];
+          if (b !== undefined) expect(b.x - a.x).toBeGreaterThanOrEqual(2 * a.radio - EPS);
+        }
+        const centro = ((fichas[0]?.x ?? 0) + (fichas.at(-1)?.x ?? 0)) / 2;
+        expect(centro).toBeCloseTo(area.x + area.ancho / 2, 6);
+      }
+      expect(disponerFichasTiradas(area, 0)).toEqual([]);
+    }
   });
 });

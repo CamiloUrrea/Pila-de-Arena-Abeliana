@@ -166,3 +166,38 @@ describe('contraste de los puntos flotantes, la etiqueta y el ritmo (WCAG)', () 
     expect(contraste(TEMA.bandaSuperior.ritmo.color, colores.fondo)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('contraste de los indicadores (WCAG)', () => {
+  const { medidor, tiradas, mazo, cargada } = TEMA.indicadores;
+
+  it.each(Object.entries(medidor.relleno))('el relleno %s del medidor contra la barra (al menos 3)', (_, color) => {
+    expect(contraste(color, medidor.barra)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('la barra del medidor se distingue del fondo (al menos 1,2)', () => {
+    expect(contraste(medidor.barra, colores.fondo)).toBeGreaterThanOrEqual(1.2);
+  });
+
+  it('el texto del medidor y el del mazo contra el fondo (al menos 4,5)', () => {
+    expect(contraste(medidor.texto, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(mazo.texto, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('las fichas de tiradas, llenas y vacías, contra el fondo (al menos 3)', () => {
+    expect(contraste(tiradas.llena, colores.fondo)).toBeGreaterThanOrEqual(3);
+    expect(contraste(tiradas.vacia, colores.fondo)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('el contorno de celda cargada contra la celda de carga 3 y contra el fondo (al menos 3)', () => {
+    expect(contraste(cargada.color, colores.carga[3] ?? 0)).toBeGreaterThanOrEqual(3);
+    expect(contraste(cargada.color, colores.fondo)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('en el punto más tenue del pulso, el contorno sigue viéndose sobre el fondo, donde se dibuja (al menos 3)', () => {
+    const mezcla = [16, 8, 0].reduce(
+      (acc, s) => acc | (Math.round(((cargada.color >> s) & 0xff) * cargada.alfaMinima + ((colores.fondo >> s) & 0xff) * (1 - cargada.alfaMinima)) << s),
+      0,
+    );
+    expect(contraste(mezcla, colores.fondo)).toBeGreaterThanOrEqual(3);
+  });
+});
