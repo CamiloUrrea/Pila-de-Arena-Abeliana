@@ -3,6 +3,15 @@ import tseslint from 'typescript-eslint';
 
 const importNoRelativo = 'core solo admite imports relativos: sin paquetes externos ni módulos de Node.';
 
+/** sim y game solo usan la interfaz pública de @pila/core (su index), nunca sus rutas internas. */
+const soloInterfazDeCore = [
+  { regex: '^@pila/core/', message: 'Importa solo «@pila/core»: sus módulos internos no son interfaz pública.' },
+  {
+    regex: '^(\\.{1,2}/)+(.+/)?core(/|$)',
+    message: 'No importes core por ruta relativa: usa «@pila/core» (interfaz pública).',
+  },
+];
+
 export default defineConfig(
   globalIgnores(['**/node_modules/', '**/dist/', '**/coverage/']),
   tseslint.configs.recommended,
@@ -15,17 +24,22 @@ export default defineConfig(
   // Aislamiento: sim y game solo usan la interfaz pública de @pila/core (su index), nunca sus rutas internas.
   // El campo `exports` de core ya bloquea `@pila/core/...`; esta regla cierra además las rutas relativas.
   {
-    files: ['packages/sim/**/*.ts', 'packages/game/**/*.ts'],
+    files: ['packages/sim/**/*.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: soloInterfazDeCore }],
+    },
+  },
+  // game, además, no puede depender del simulador: los bots y las herramientas de balance no son parte del juego.
+  {
+    files: ['packages/game/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
-            { regex: '^@pila/core/', message: 'Importa solo «@pila/core»: sus módulos internos no son interfaz pública.' },
-            {
-              regex: '^(\\.{1,2}/)+(.+/)?core(/|$)',
-              message: 'No importes core por ruta relativa: usa «@pila/core» (interfaz pública).',
-            },
+            ...soloInterfazDeCore,
+            { regex: '^@pila/sim(/|$)', message: 'game no puede importar @pila/sim.' },
+            { regex: '^(\\.{1,2}/)+(.+/)?sim(/|$)', message: 'game no puede importar el simulador por ruta relativa.' },
           ],
         },
       ],

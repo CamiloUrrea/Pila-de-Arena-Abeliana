@@ -10,7 +10,8 @@
     "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/sim && tsc -p packages/game",
     "lint": "eslint --max-warnings=0 .",
     "test": "vitest run --reporter=verbose",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run test"
+    "build": "pnpm --filter @pila/game build",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build"
   },
   "devDependencies": {
     "eslint": "10.12.0",
