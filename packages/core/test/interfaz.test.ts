@@ -3,6 +3,7 @@ import * as nucleo from '../src/index.ts';
 import type {
   Accion,
   AdicionAplicada,
+  Colocacion,
   ColocacionDeshecha,
   Config,
   DefinicionGrano,
@@ -41,6 +42,7 @@ const SUPERFICIE = [
   'DEFINICIONES_GRANOS',
   'accionesLegales',
   'aplicar',
+  'aplicarAdiciones',
   'barajar',
   'crearRonda',
   'derivarFlujo',
@@ -59,6 +61,7 @@ const SUPERFICIE = [
  */
 export type TiposPublicos = [
   Accion,
+  Colocacion,
   Config,
   DefinicionGrano,
   Direccion,

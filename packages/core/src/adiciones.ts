@@ -6,9 +6,14 @@ import type { Celdas, Colocacion } from './tipos.ts';
 export type ResultadoAdiciones = { readonly celdas: Celdas; readonly eventos: readonly AdicionAplicada[] };
 
 /**
- * Paso 1 de «Resolución de una tirada»: suma a la rejilla lo que declara `DEFINICIONES_GRANOS` para cada
- * colocación, ignorando lo que cae fuera. Emite un `AdicionAplicada` por celda afectada, con su total, por filas.
- * Una colocación fuera de la rejilla es un error de programación y lanza `RangeError`. No muta la entrada.
+ * Paso 1 de «Resolución de una tirada»: calcula el efecto de colocar granos sobre una rejilla, sin mutarla.
+ * Suma lo que declara `DEFINICIONES_GRANOS` para cada colocación e ignora lo que cae fuera de la rejilla.
+ * Es la misma función que usa `Confirmar`, así que sirve para previsualizar una mano sin duplicar las reglas.
+ *
+ * @param celdas Rejilla `lado × lado`, indexada `celdas[y][x]`. No se modifica.
+ * @param colocaciones Granos colocados, con su tipo y su celda. Varios pueden compartir celda.
+ * @returns La rejilla nueva y un `AdicionAplicada` por celda que recibe granos, con su total, por filas.
+ * @throws RangeError si una colocación cae fuera de la rejilla (error de programación).
  */
 export function aplicarAdiciones(celdas: Celdas, colocaciones: readonly Colocacion[]): ResultadoAdiciones {
   const lado = celdas.length;

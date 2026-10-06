@@ -61,6 +61,7 @@ console.log(`reproducible: ${repeticion.ok && serializar(repeticion.valor.estado
 | `crearRonda` | `(config: Config, semilla: number) => Resultado<{ estado: Estado; eventos: readonly Evento[] }, ErrorConfig>` | Valida la configuración, siembra la rejilla (flujo `siembra`), baraja el mazo y roba la primera mano (flujo `mazo`). Emite un único `ManoRobada`. |
 | `aplicar` | `(estado: Estado, accion: Accion) => Resultado<{ estado: Estado; eventos: readonly Evento[] }, ErrorAccion>` | Aplica `Colocar`, `Deshacer` o `Confirmar`. `Confirmar` resuelve la tirada y evalúa su fin: victoria, derrota o mano nueva. |
 | `accionesLegales` | `(estado: Estado) => readonly Accion[]` | Acciones que `aplicar` acepta, en orden fijo: `Colocar` por índice de mano y celdas por filas, luego `Deshacer` y luego `Confirmar`. Vacía fuera de la fase `colocando`. |
+| `aplicarAdiciones` | `(celdas: readonly (readonly number[])[], colocaciones: readonly Colocacion[]) => { celdas; eventos: readonly AdicionAplicada[] }` | Paso 1 de la resolución: el efecto de colocar granos sobre una rejilla, sin mutarla. Devuelve la rejilla nueva y un `AdicionAplicada` por celda que recibe granos, por filas. Es la misma función que usa `Confirmar`; sirve para previsualizar una mano. Lanza `RangeError` si una colocación cae fuera de la rejilla (error de programación). |
 | `reproducir` | `(config: Config, semilla: number, acciones: readonly Accion[]) => Resultado<{ estado: Estado; eventos: readonly Evento[] }, ErrorReproduccion>` | `crearRonda` y luego cada acción en orden. Ante un error informa del índice de la acción que falla. |
 | `serializar` | `(estado: Estado) => string` | JSON canónico (claves ordenadas) con la envoltura `{"estado":{…},"formato":1}`. |
 | `deserializar` | `(texto: string) => Resultado<Estado, ErrorDeserializacion>` | Inversa exacta de `serializar`; comprueba la forma y valida el estado. |
@@ -73,13 +74,13 @@ console.log(`reproducible: ${repeticion.ok && serializar(repeticion.valor.estado
 
 Datos: `CONFIG_INICIAL` (la configuración de la ronda 1, calibrada en T2.5: `multiplicadorPorOleada` 50 y `meta` 5000) y `DEFINICIONES_GRANOS` (las adiciones de cada tipo de grano como tabla de desplazamientos).
 
-Tipos: `Config`, `Estado`, `Accion`, `Evento` y cada evento por separado, `Resultado`, `TipoGrano`, `Fase`, `GranoMano`, `Direccion`, `EstadoFlujo`, `NombreFlujo`, `EstadoRng`, `DefinicionGrano` y los errores (`ErrorConfig`, `ErrorEstado`, `ErrorDeserializacion`, `ErrorResolucion`, `ErrorAccion`, `MotivoIlegal` y `ErrorReproduccion`). Cada uno lleva su TSDoc en el código.
+Tipos: `Config`, `Estado`, `Accion`, `Evento` y cada evento por separado, `Resultado`, `TipoGrano`, `Fase`, `GranoMano`, `Colocacion` (un grano de un tipo en una celda, la entrada de `aplicarAdiciones`), `Direccion`, `EstadoFlujo`, `NombreFlujo`, `EstadoRng`, `DefinicionGrano` y los errores (`ErrorConfig`, `ErrorEstado`, `ErrorDeserializacion`, `ErrorResolucion`, `ErrorAccion`, `MotivoIlegal` y `ErrorReproduccion`). Cada uno lleva su TSDoc en el código.
 
 ## Política de errores
 
 - **Los errores de juego se devuelven como `Resultado`**, nunca como excepciones: una acción ilegal (`AccionIlegal` con su `MotivoIlegal`), una resolución que supera `topeOleadas` (`ResolucionNoTermino`), una configuración inválida (`ErrorConfig`) o un texto que no se puede cargar (`ErrorDeserializacion`). Un error de `aplicar` deja el estado intacto, sin consumir azar ni emitir eventos.
 - **Los motivos de acción ilegal se comprueban en este orden:** `FaseIncorrecta`, `IndiceManoInvalido`, `GranoYaColocado`, `CeldaFueraDeRejilla`, `NadaQueDeshacer` y `ManoIncompleta`.
-- **Los `RangeError` son errores de programación**, no caminos de juego: una semilla que no es un entero de 0 a 2^32−1, o límites inválidos en `enteroEnRango`.
+- **Los `RangeError` son errores de programación**, no caminos de juego: una semilla que no es un entero de 0 a 2^32−1, límites inválidos en `enteroEnRango` o una colocación fuera de la rejilla en `aplicarAdiciones`.
 - **`aplicar` presupone un estado válido**, como los que producen `crearRonda`, `aplicar` y `deserializar`. Con un estado inválido construido a mano su comportamiento no está definido; para comprobarlo antes existe `validarEstado`.
 
 ## Inmutabilidad

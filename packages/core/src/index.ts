@@ -13,6 +13,9 @@ export { crearRonda } from './ronda.ts';
 export { accionesLegales, aplicar, reproducir } from './acciones.ts';
 export type { Accion, ErrorAccion, ErrorReproduccion, MotivoIlegal } from './acciones.ts';
 
+// Adiciones de los granos, para previsualizar una mano colocada.
+export { aplicarAdiciones } from './adiciones.ts';
+
 // Serialización y validación.
 export { deserializar, serializar } from './serializacion.ts';
 export { validarConfig, validarEstado } from './validacion.ts';
@@ -27,6 +30,7 @@ export { DEFINICIONES_GRANOS } from './data/granos.ts';
 // Tipos.
 export type { ErrorResolucion } from './oleadas.ts';
 export type {
+  Colocacion,
   Config,
   DefinicionGrano,
   ErrorConfig,
