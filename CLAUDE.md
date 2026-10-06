@@ -11,3 +11,6 @@
 - No añadas mecánicas fuera del alcance del MVP ni dependencias nuevas sin avisar.
 - La especificación del núcleo está en `docs/especificacion-nucleo.md`; si algo la contradice, avisa y pregunta antes de cambiarla.
 - Prohibida cualquier interacción con GitHub (push, pull, fetch, clone, remotos, `gh`, API, PR, issues, releases, Actions). Solo commits locales; el usuario se encarga del resto.
+
+# Contexto de diseño
+- La partida del MVP tiene un número fijo de rondas (valor provisional: 8; se fija en H6). El modo infinito, con escalada sin fin, queda fuera del MVP, pero la escalada (metas, recompensas) no debe suponer un final: el modo infinito debe ser después solo un cambio de configuración.
