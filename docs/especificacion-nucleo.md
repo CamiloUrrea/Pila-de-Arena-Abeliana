@@ -1,10 +1,10 @@
-# Especificación del núcleo (v0.8)
+# Especificación del núcleo (v0.9)
 
 > Copia versionada para el repositorio. La fuente de verdad es el documento «MVP - Juego de la Pila de Arena Abeliana», pestaña «Especificación del núcleo». Si la especificación cambia, se vuelve a exportar y se sube de versión.
 
 ## Alcance
 
-Esta especificación fija el comportamiento exacto del paquete `core` para una ronda del MVP: datos, resolución de las oleadas, puntos, eventos y pruebas. Cubre el hito H1; la progresión entre rondas (H6) y los bonus (H5) quedan como ganchos.
+Esta especificación fija el comportamiento exacto del paquete `core` para una ronda del MVP: datos, resolución de las oleadas, puntos, eventos y pruebas. Cubre el hito H1; la progresión entre rondas (H6) y los bonus (H5) quedan como ganchos. La partida del MVP tiene un número fijo de rondas (provisional: 8), definido fuera del núcleo de una ronda.
 
 Principios innegociables:
 
@@ -27,9 +27,11 @@ Las celdas se indexan con x = columna e y = fila, con el origen arriba a la izqu
 | `tamanoMano` | Granos robados por tirada | 5 |
 | `siembra` | Mínimo y máximo de granos por celda al empezar; el máximo debe ser menor que el umbral, para que la rejilla inicial sea estable | 0 y 2 |
 | `mazo` | Cantidad de cada tipo de grano | 20 normales, 6 pesados, 4 explosivos |
-| `meta` | Puntos de desborde necesarios, en centésimas | 1000 (a calibrar en H2) |
-| `multiplicadorPorOleada` | Aumento por oleada, en centésimas | 10 |
+| `meta` | Puntos de desborde necesarios, en centésimas | 5000 (calibrada en T2.5: el aleatorio gana cerca del 50 %) |
+| `multiplicadorPorOleada` | Aumento por oleada, en centésimas | 50 (calibrado en T2.5) |
 | `topeOleadas` | Máximo de oleadas por tirada | 1000 |
+
+Los valores de la ronda 1 salen de la calibración de T2.5: con meta 5000 y multiplicador 50, el bot aleatorio gana cerca del 50 % de las rondas y el cargador le saca unos 18 puntos porcentuales. Los ejemplos de oro usan multiplicadorPorOleada 10 y no los valores iniciales del juego.
 
 ### Estado
 
@@ -145,7 +147,7 @@ Estas pruebas forman el criterio de cierre de H1. Las de propiedades se escriben
 
 ## Ejemplos de oro
 
-Resultados calculados a mano para una rejilla de 3×3 con `tamanoMano` 1, que las pruebas deben reproducir exactamente. Cada rejilla se lee por filas.
+Resultados calculados a mano para una rejilla de 3×3 con `tamanoMano` 1 y multiplicadorPorOleada 10, que las pruebas deben reproducir exactamente. Cada rejilla se lee por filas.
 
 ### A. Derrumbe en una esquina
 
@@ -194,7 +196,7 @@ Sin oleadas. Los dos vecinos que quedarían fuera de la rejilla no reciben nada 
 
 ## Decisiones confirmadas
 
-Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5, otra al preparar T1.7 y otra al cerrar T1.7b.
+Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada en cada una. Dos se añadieron al revisar la v0.1, una en cada cierre de T1.1, T1.2, T1.3 y T1.5, otra al preparar T1.7 y otra al cerrar T1.7b y otra al preparar T2.5b.
 
 - **Una oleada, un derrumbe por celda: aprobado.** Una celda con 8 o más granos necesita varias oleadas, y las cargas grandes alargan la cascada. Alternativa descartada: derrumbes múltiples por oleada, que acortan las cascadas y bajan los puntos.
 - **Explosivo en el borde: aprobado.** Los vecinos fuera de la rejilla no reciben nada ni dan puntos. Alternativa descartada: contarlos como granos que salen, que daría puntos sin cascada.
@@ -211,3 +213,4 @@ Decisiones revisadas y aprobadas al cerrar T0.1, con la alternativa descartada e
 - **Granos como tabla de desplazamientos: añadido en v0.6.** Cada tipo declara sus adiciones como una lista de (dx, dy, cantidad) y lo que cae fuera de la rejilla se ignora, así que añadir un tipo de grano es añadir una fila de datos. Alternativa descartada: una rama de código por tipo, que va contra la regla de granos y bonus como datos. Además, la prueba de reciclaje con tamanoMano 6 no ejercita los granos restantes (cinco manos de 6 vacían justo el mazo de 30), por eso se añadió el caso con tamanoMano 7.
 - **Orden de colocación, coherencia de fase y siembra estable: añadido en v0.7.** El estado guarda ordenColocacion porque sin él Deshacer no sabría cuál fue la última colocación. Las fases se validan contra los puntos y las tiradas, y el máximo de siembra debe ser menor que el umbral para que ninguna ronda empiece con la rejilla inestable. No se exige que la mano tenga exactamente tamanoMano granos, porque el bonus Eco traerá un grano extra. Alternativa descartada: definir Deshacer por el mayor índice de mano, que no coincide con lo que el jugador hizo en último lugar.
 - **Contrato de aplicar con estados válidos y motivos de acción ilegal: añadido en v0.8.** aplicar presupone un estado que venga de crearRonda, aplicar o deserializar, que ya validan; las acciones ilegales devuelven uno de seis motivos con un orden de comprobación fijo. Alternativa descartada: validar el estado completo en cada acción, que es caro en el simulador y redundante, porque ningún camino público produce estados inválidos.
+- **Calibración de la ronda 1: añadido en v0.9.** Con la configuración inicial anterior (meta 1000, multiplicador 10) los cinco bots ganaban casi siempre y el mejor superaba al aleatorio por solo 6 a 8 puntos porcentuales. El barrido de T2.5a mostró que el multiplicador de cadena es la palanca de habilidad: con 25 la ventaja es de unos 13 puntos, con 50 de unos 18 y con 100 de unos 22, con rendimientos decrecientes y más varianza. Se fija el multiplicador en 50 y la meta en 5000, con la que el aleatorio gana cerca del 50 % en 3×3. Alternativas descartadas: multiplicador 25, que apenas supera la alarma de habilidad, y 100, que añade azar a cambio de poco.
