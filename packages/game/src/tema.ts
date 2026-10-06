@@ -22,8 +22,11 @@ export type AspectoFicha = {
   readonly puntos: number;
 };
 
-/** Colores de un estado del botón Deshacer. */
+/** Colores de un estado de un botón de la banda inferior. */
 export type AspectoBoton = { readonly fondo: number; readonly texto: number };
+
+/** Curvas de aceleración disponibles para los granos en vuelo (ver `aplicarCurva` en `cascada.ts`). */
+export type Curva = 'lineal' | 'entradaSalidaCuadratica' | 'entradaSalidaCubica';
 
 export type Tema = {
   readonly colores: {
@@ -97,12 +100,16 @@ export type Tema = {
     /** Ancho máximo del botón, como fracción del ancho de la banda y como múltiplo de su alto útil. */
     readonly anchoBoton: number;
     readonly anchoBotonPorAlto: number;
-    /** Alto del botón como fracción de su ancho (sin pasar del alto de la fila). */
+    /** Alto de cada botón como fracción de su ancho (sin pasar de su mitad de la fila). */
     readonly altoBoton: number;
+    /** Separación vertical entre Confirmar (arriba) y Deshacer (abajo), como fracción del alto de la fila. */
+    readonly separacionBotones: number;
     readonly radioBoton: number;
     /** Tamaño del texto del botón y de la descripción, como fracción del alto de su rectángulo. */
     readonly textoBoton: number;
     readonly textoDescripcion: number;
+    /** Opacidad de fichas y botones mientras la interacción está bloqueada (cascada en curso o ronda terminada). */
+    readonly alfaBloqueada: number;
   };
   readonly fichas: {
     readonly tipos: Readonly<Record<TipoGrano, AspectoFicha>>;
@@ -113,7 +120,35 @@ export type Tema = {
     /** Estrella: número de puntas y radio interior como fracción del exterior. */
     readonly estrella: { readonly puntas: number; readonly radioInterior: number };
   };
+  /** Deshacer, el botón secundario. */
   readonly boton: { readonly activo: AspectoBoton; readonly desactivado: AspectoBoton };
+  /** Confirmar, el botón primario. */
+  readonly botonPrimario: { readonly activo: AspectoBoton; readonly desactivado: AspectoBoton };
+  /** Animación de la cascada de una tirada (ver `cascada.ts`). */
+  readonly animacion: {
+    /** Duración base de cada paso al ritmo 1, en milisegundos. */
+    readonly duraciones: { readonly adicion: number; readonly alerta: number; readonly derrumbe: number };
+    /** Curva de aceleración de los granos en vuelo. */
+    readonly curva: Curva;
+    /** Pulsos de intensidad de la alerta en su paso, y opacidad máxima del parpadeo (en el color de inestable). */
+    readonly pulsosAlerta: number;
+    readonly opacidadAlerta: number;
+    /** Distancia que recorre un grano que sale del tablero, en lados de celda desde el centro de su origen. */
+    readonly distanciaFuera: number;
+    /** Último tramo del vuelo, como fracción del paso, en el que se desvanece un grano que sale del tablero. */
+    readonly tramoDesvanecer: number;
+    /** Aumento máximo de tamaño de una celda que recibe granos en el paso de adición. */
+    readonly escalaAparicion: number;
+    /** Granos en vuelo: radio en fracción del lado de la celda, relleno claro y contorno oscuro (fracción del radio). */
+    readonly granoVuelo: {
+      readonly radio: number;
+      readonly relleno: number;
+      readonly contorno: number;
+      readonly grosorContorno: number;
+    };
+  };
+  /** Texto central del final de ronda, como fracción del lado del tablero. */
+  readonly finDeRonda: { readonly titulo: number; readonly nota: number; readonly velo: number };
   readonly tipografia: {
     /** Fuente del sistema. */
     readonly familia: string;
@@ -155,9 +190,11 @@ export const TEMA: Tema = {
     anchoBoton: 0.2,
     anchoBotonPorAlto: 1.4,
     altoBoton: 0.4,
+    separacionBotones: 0.08,
     radioBoton: 0.25,
     textoBoton: 0.42,
     textoDescripcion: 0.45,
+    alfaBloqueada: 0.4,
   },
   fichas: {
     tipos: {
@@ -173,6 +210,21 @@ export const TEMA: Tema = {
     activo: { fondo: 0xf5f0ff, texto: 0x0a0420 },
     desactivado: { fondo: 0x22144d, texto: 0x6f6596 },
   },
+  botonPrimario: {
+    activo: { fondo: 0x00e5ff, texto: 0x0a0420 },
+    desactivado: { fondo: 0x22144d, texto: 0x6f6596 },
+  },
+  animacion: {
+    duraciones: { adicion: 300, alerta: 160, derrumbe: 320 },
+    curva: 'entradaSalidaCubica',
+    pulsosAlerta: 1,
+    opacidadAlerta: 0.85,
+    distanciaFuera: 1.1,
+    tramoDesvanecer: 0.4,
+    escalaAparicion: 0.12,
+    granoVuelo: { radio: 0.11, relleno: 0xf5f0ff, contorno: 0x0a0420, grosorContorno: 0.3 },
+  },
+  finDeRonda: { titulo: 0.09, nota: 0.045, velo: 0.82 },
   tipografia: {
     familia: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     pesoCarga: 'bold',

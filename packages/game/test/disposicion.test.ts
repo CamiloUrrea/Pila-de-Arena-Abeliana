@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from '../src/disposicion.ts';
+import { botonConfirmarEn, botonDeshacerEn, celdaEn, disponer, disponerMano, fichaEn } from '../src/disposicion.ts';
 import type { Disposicion, Rect } from '../src/disposicion.ts';
 import { BANDAS_INICIALES, TEMA } from '../src/tema.ts';
 
@@ -145,8 +145,19 @@ function comprobarMano(ancho: number, alto: number, n: number): void {
   if (primera !== undefined && ultima !== undefined) {
     expect(Math.abs((primera.x - primera.radio + ultima.x + ultima.radio) / 2 - (banda.x + banda.ancho / 2))).toBeLessThan(EPS);
   }
-  // La descripción, dentro de la banda y sin tocar el botón.
+  // Confirmar: dentro de la banda, encima de Deshacer sin solaparse, y a la derecha de las fichas.
+  const c = d.confirmar;
+  expect(c.ancho).toBeGreaterThan(0);
+  expect(c.alto).toBeGreaterThan(0);
+  expect(c.x).toBeGreaterThanOrEqual(banda.x - EPS);
+  expect(c.y).toBeGreaterThanOrEqual(banda.y - EPS);
+  expect(c.x + c.ancho).toBeLessThanOrEqual(banda.x + banda.ancho + EPS);
+  expect(c.y + c.alto).toBeLessThanOrEqual(banda.y + banda.alto + EPS);
+  expect(c.y + c.alto).toBeLessThan(boton.y + EPS);
+  for (const f of d.fichas) expect(f.x + f.radio).toBeLessThanOrEqual(c.x + EPS);
+  // La descripción, dentro de la banda y sin tocar los botones.
   expect(d.descripcion.y).toBeGreaterThanOrEqual(boton.y + boton.alto - EPS);
+  expect(d.descripcion.y).toBeGreaterThanOrEqual(c.y + c.alto - EPS);
   expect(d.descripcion.y + d.descripcion.alto).toBeLessThanOrEqual(banda.y + banda.alto + EPS);
 }
 
@@ -285,5 +296,30 @@ describe('fichaEn', () => {
 
   it('con una ventana degenerada no encuentra ninguna ficha', () => {
     expect(fichaEn({ x: 0, y: 0 }, disponerMano({ ancho: 0, alto: 0 }, 5))).toBeNull();
+  });
+});
+
+describe('botonConfirmarEn', () => {
+  it('acierta dentro del botón y falla fuera, también en Deshacer', () => {
+    const d = disponerMano({ ancho: 800, alto: 600 }, 5);
+    const b = d.confirmar;
+    expect(botonConfirmarEn({ x: b.x + b.ancho / 2, y: b.y + b.alto / 2 }, d)).toBe(true);
+    expect(botonConfirmarEn({ x: b.x, y: b.y }, d)).toBe(true);
+    expect(botonConfirmarEn({ x: b.x - 1, y: b.y + 1 }, d)).toBe(false);
+    expect(botonConfirmarEn({ x: b.x + b.ancho, y: b.y + 1 }, d)).toBe(false);
+    expect(botonConfirmarEn({ x: b.x + 1, y: b.y - 1 }, d)).toBe(false);
+    expect(botonConfirmarEn({ x: b.x + 1, y: b.y + b.alto }, d)).toBe(false);
+    const s = d.deshacer;
+    expect(botonConfirmarEn({ x: s.x + s.ancho / 2, y: s.y + s.alto / 2 }, d)).toBe(false);
+    expect(botonDeshacerEn({ x: b.x + b.ancho / 2, y: b.y + b.alto / 2 }, d)).toBe(false);
+  });
+
+  it('con una ventana asimétrica distingue x de y', () => {
+    const d = disponerMano({ ancho: 2400, alto: 600 }, 4);
+    const b = d.confirmar;
+    const centro = { x: b.x + b.ancho / 2, y: b.y + b.alto / 2 };
+    expect(botonConfirmarEn(centro, d)).toBe(true);
+    // El punto con los ejes intercambiados queda fuera de la ventana y del botón.
+    expect(botonConfirmarEn({ x: centro.y, y: centro.x }, d)).toBe(false);
   });
 });

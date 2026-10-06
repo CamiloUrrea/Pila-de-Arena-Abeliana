@@ -1,12 +1,16 @@
 // Textos de la interfaz, en español y en un solo sitio. La descripción de cada grano se genera de sus datos
 // (`DEFINICIONES_GRANOS`), de modo que un tipo nuevo tiene texto sin tocar este módulo.
 import { DEFINICIONES_GRANOS } from '@pila/core';
-import type { DefinicionGrano, MotivoIlegal, TipoGrano } from '@pila/core';
+import type { DefinicionGrano, Estado, MotivoIlegal, TipoGrano } from '@pila/core';
+import type { ErrorCascada } from './cascada.ts';
 import type { ErrorControlador } from './controlador.ts';
 
 export const TEXTOS = {
   deshacer: 'Deshacer',
-  manoCompleta: 'Mano completa',
+  confirmar: 'Confirmar',
+  manoCompleta: 'Mano completa: confirma la tirada',
+  resolviendo: 'Resolviendo…',
+  recargar: 'Recarga la página para jugar otra ronda',
   informacion: (semilla: number, lado: number): string => `semilla ${semilla} · lado ${lado}`,
   errorInicio: 'No se puede empezar la ronda',
   configuracionInvalida: (campo: string, motivo: string): string => `Configuración inválida: ${campo}: ${motivo}.`,
@@ -113,14 +117,14 @@ const MOTIVOS: Readonly<Record<MotivoIlegal, string>> = {
   GranoYaColocado: 'Ese grano ya está colocado: deshazlo antes de moverlo.',
   CeldaFueraDeRejilla: 'Esa casilla está fuera del tablero.',
   NadaQueDeshacer: 'No hay nada que deshacer: todavía no has colocado ningún grano.',
-  ManoIncompleta: 'Faltan granos por colocar.',
+  ManoIncompleta: 'Coloca todos los granos antes de confirmar.',
 };
 
 /**
- * Mensaje en español para cada error del controlador y del núcleo. Es exhaustiva: si aparece un tipo de error
- * nuevo, el `switch` deja de compilar hasta que tenga su mensaje.
+ * Mensaje en español para cada error del controlador, del núcleo y de la cascada. Es exhaustiva: si aparece un tipo
+ * de error nuevo, el `switch` deja de compilar hasta que tenga su mensaje.
  */
-export function describirError(error: ErrorControlador): string {
+export function describirError(error: ErrorControlador | ErrorCascada): string {
   switch (error.tipo) {
     case 'SinGranoSeleccionado':
       return 'No hay ningún grano seleccionado: todos los granos de la mano están colocados.';
@@ -133,10 +137,32 @@ export function describirError(error: ErrorControlador): string {
     case 'AccionIlegal':
       return MOTIVOS[error.motivo];
     case 'ResolucionNoTermino':
-      return `La tirada no terminó en ${error.topeOleadas} oleadas.`;
+      return `Error interno: la tirada no terminó en ${error.topeOleadas} oleadas.`;
+    case 'CascadaInvalida':
+      return `Error interno: no se pudo animar la tirada (${error.motivo}).`;
     default: {
       const desconocido: never = error;
       return `Error desconocido: ${JSON.stringify(desconocido)}`;
     }
+  }
+}
+
+/** Puntos en centésimas como texto con dos decimales y coma: 523 → «5,23». Aritmética entera. */
+export function formatearPuntos(centesimas: number): string {
+  const signo = centesimas < 0 ? '−' : '';
+  const v = Math.abs(Math.trunc(centesimas));
+  return `${signo}${Math.floor(v / 100)},${String(v % 100).padStart(2, '0')}`;
+}
+
+/** «Ronda ganada» o «Ronda perdida» con los puntos finales; `null` si la ronda sigue en juego. */
+export function describirFinDeRonda(estado: Estado): string | null {
+  const puntos = `${formatearPuntos(estado.puntos)} puntos`;
+  switch (estado.fase) {
+    case 'ganada':
+      return `Ronda ganada · ${puntos}`;
+    case 'perdida':
+      return `Ronda perdida · ${puntos}`;
+    case 'colocando':
+      return null;
   }
 }

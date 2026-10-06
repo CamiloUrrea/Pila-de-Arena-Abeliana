@@ -19,7 +19,11 @@ describe('accionDeTecla', () => {
     expect(tecla(t)).toEqual({ tipo: 'deshacer' });
   });
 
-  it.each(['0', 'a', 'x', 'Enter', ' ', 'ArrowUp', 'ArrowDown', 'Escape', 'Delete', '10', 'F1', ''])(
+  it.each(['Enter', ' '])('«%s» acepta', (t) => {
+    expect(tecla(t)).toEqual({ tipo: 'aceptar' });
+  });
+
+  it.each(['0', 'a', 'x', 'Tab', 'Spacebar', 'ArrowUp', 'ArrowDown', 'Escape', 'Delete', '10', 'F1', ''])(
     'la tecla «%s» no está mapeada',
     (t) => {
       expect(tecla(t)).toBeNull();
@@ -32,7 +36,7 @@ describe('accionDeTecla', () => {
     { ctrl: false, alt: false, meta: true },
     { ctrl: true, alt: true, meta: true },
   ])('con modificadores %o ninguna tecla hace nada', (mods) => {
-    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace']) {
+    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace', 'Enter', ' ']) {
       expect(accionDeTecla({ tecla: t, ...mods })).toBeNull();
     }
   });

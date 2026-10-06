@@ -18,6 +18,8 @@ export type DisposicionMano = {
   readonly fichas: readonly Ficha[];
   /** Línea de texto bajo las fichas (la descripción del grano seleccionado). */
   readonly descripcion: Rect;
+  /** Botón primario, a la derecha y encima de Deshacer. */
+  readonly confirmar: Rect;
   readonly deshacer: Rect;
 };
 
@@ -89,9 +91,10 @@ export function disponer(ancho: number, alto: number, lado: number, tema: Tema =
 }
 
 /**
- * Dispone la banda inferior para una mano de `numeroDeGranos` fichas: el botón Deshacer a la derecha, las fichas
- * en una fila centrada en la banda (con el mismo espacio libre a cada lado que ocupa el botón, para que la fila
- * quede centrada sin tocarlo) y la descripción debajo. Las fichas se escalan para caber con cualquier número y
+ * Dispone la banda inferior para una mano de `numeroDeGranos` fichas: a la derecha, los botones Confirmar (arriba)
+ * y Deshacer (abajo), apilados en el alto de la fila; las fichas en una fila centrada en la banda (con el mismo
+ * espacio libre a cada lado que ocupan los botones, para que la fila quede centrada sin tocarlos) y la descripción
+ * debajo. Las fichas se escalan para caber con cualquier número y
  * cualquier forma de ventana; una ventana degenerada da tamaños 0, nunca NaN.
  */
 export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tema = TEMA): DisposicionMano {
@@ -105,13 +108,11 @@ export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tem
   const centroFila = banda.y + margen + altoFila / 2;
 
   const anchoBoton = Math.max(0, Math.min(banda.ancho * p.anchoBoton, altoUtil * p.anchoBotonPorAlto));
-  const altoBoton = Math.min(anchoBoton * p.altoBoton, altoFila);
-  const deshacer: Rect = {
-    x: banda.x + banda.ancho - margen - anchoBoton,
-    y: centroFila - altoBoton / 2,
-    ancho: anchoBoton,
-    alto: altoBoton,
-  };
+  const separacion = altoFila * p.separacionBotones;
+  const altoBoton = Math.max(0, Math.min(anchoBoton * p.altoBoton, (altoFila - separacion) / 2));
+  const xBoton = banda.x + banda.ancho - margen - anchoBoton;
+  const confirmar: Rect = { x: xBoton, y: centroFila - separacion / 2 - altoBoton, ancho: anchoBoton, alto: altoBoton };
+  const deshacer: Rect = { x: xBoton, y: centroFila + separacion / 2, ancho: anchoBoton, alto: altoBoton };
 
   // Ancho simétrico disponible para la fila: la banda menos el botón y sus márgenes a cada lado.
   const anchoFila = Math.max(0, banda.ancho - 2 * (2 * margen + anchoBoton));
@@ -127,7 +128,7 @@ export function disponerMano(ventana: Ventana, numeroDeGranos: number, tema: Tem
     ancho: Math.max(0, banda.ancho - 2 * margen),
     alto: altoUtil - altoFila,
   };
-  return { banda, fichas, descripcion, deshacer };
+  return { banda, fichas, descripcion, confirmar, deshacer };
 }
 
 const contiene = (r: Rect, p: Punto): boolean => p.x >= r.x && p.x < r.x + r.ancho && p.y >= r.y && p.y < r.y + r.alto;
@@ -138,6 +139,11 @@ export function celdaEn(punto: Punto, disposicion: Disposicion): Punto | null {
     for (const [x, r] of fila.entries()) if (contiene(r, punto)) return { x, y };
   }
   return null;
+}
+
+/** Si `punto` cae dentro del botón Confirmar. */
+export function botonConfirmarEn(punto: Punto, mano: DisposicionMano): boolean {
+  return contiene(mano.confirmar, punto);
 }
 
 /** Si `punto` cae dentro del botón Deshacer. */

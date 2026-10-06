@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { DEFINICIONES_GRANOS } from '@pila/core';
-import type { MotivoIlegal } from '@pila/core';
+import { CONFIG_INICIAL, crearRonda } from '@pila/core';
+import type { Estado, MotivoIlegal } from '@pila/core';
+import type { ErrorCascada } from '../src/cascada.ts';
 import type { ErrorControlador } from '../src/controlador.ts';
-import { TEXTOS, describirDefinicion, describirError, describirGrano } from '../src/textos.ts';
+import {
+  TEXTOS,
+  describirDefinicion,
+  describirError,
+  describirFinDeRonda,
+  describirGrano,
+  formatearPuntos,
+} from '../src/textos.ts';
 
 describe('describirGrano', () => {
   it('describe los tres tipos del MVP a partir de DEFINICIONES_GRANOS', () => {
@@ -77,26 +86,32 @@ describe('describirGrano', () => {
 
   it('los textos fijos de la interfaz están en español', () => {
     expect(TEXTOS.deshacer).toBe('Deshacer');
-    expect(TEXTOS.manoCompleta).toBe('Mano completa');
+    expect(TEXTOS.manoCompleta).toBe('Mano completa: confirma la tirada');
+    expect(TEXTOS.confirmar).toBe('Confirmar');
+    expect(TEXTOS.resolviendo).toBe('Resolviendo…');
+    expect(TEXTOS.recargar).toBe('Recarga la página para jugar otra ronda');
     expect(TEXTOS.informacion(42, 3)).toBe('semilla 42 · lado 3');
   });
 });
 
-/** Clave de cada error posible: su tipo o, para `AccionIlegal`, su motivo. */
-type ClaveError = Exclude<ErrorControlador['tipo'], 'AccionIlegal'> | MotivoIlegal;
+type ErrorPosible = ErrorControlador | ErrorCascada;
 
-const ilegal = (motivo: MotivoIlegal): ErrorControlador => ({ tipo: 'AccionIlegal', motivo });
+/** Clave de cada error posible: su tipo o, para `AccionIlegal`, su motivo. */
+type ClaveError = Exclude<ErrorPosible['tipo'], 'AccionIlegal'> | MotivoIlegal;
+
+const ilegal = (motivo: MotivoIlegal): ErrorPosible => ({ tipo: 'AccionIlegal', motivo });
 
 /**
  * Un ejemplo de cada error conocido. El tipo `Record<ClaveError, …>` obliga a añadir aquí cualquier error nuevo
  * del controlador o del núcleo: si falta uno, esta prueba deja de compilar.
  */
-const ERRORES: Readonly<Record<ClaveError, ErrorControlador>> = {
+const ERRORES: Readonly<Record<ClaveError, ErrorPosible>> = {
   SinGranoSeleccionado: { tipo: 'SinGranoSeleccionado' },
   GranoNoSeleccionable: { tipo: 'GranoNoSeleccionable', indice: 3 },
   NoEsLaUltimaColocacion: { tipo: 'NoEsLaUltimaColocacion', indice: 1 },
   GranoNoColocado: { tipo: 'GranoNoColocado', indice: 2 },
   ResolucionNoTermino: { tipo: 'ResolucionNoTermino', topeOleadas: 1000 },
+  CascadaInvalida: { tipo: 'CascadaInvalida', motivo: 'Derrumbe de (1, 1), que no está en OleadaIniciada 1' },
   FaseIncorrecta: ilegal('FaseIncorrecta'),
   IndiceManoInvalido: ilegal('IndiceManoInvalido'),
   GranoYaColocado: ilegal('GranoYaColocado'),
@@ -120,7 +135,37 @@ describe('describirError', () => {
     expect(new Set(mensajes).size).toBe(mensajes.length);
   });
 
+  it('ManoIncompleta pide colocar todos los granos', () => {
+    expect(describirError(ERRORES.ManoIncompleta)).toBe('Coloca todos los granos antes de confirmar.');
+  });
+
+  it('ResolucionNoTermino y CascadaInvalida son errores internos', () => {
+    expect(describirError(ERRORES.ResolucionNoTermino)).toMatch(/^Error interno/);
+    expect(describirError(ERRORES.CascadaInvalida)).toMatch(/^Error interno/);
+  });
+
   it('NoEsLaUltimaColocacion explica cómo deshacer', () => {
     expect(describirError(ERRORES.NoEsLaUltimaColocacion)).toBe('Solo se puede deshacer la última colocación: usa Deshacer.');
+  });
+});
+
+describe('describirFinDeRonda', () => {
+  const estado = (): Estado => {
+    const r = crearRonda(CONFIG_INICIAL, 1);
+    if (!r.ok) throw new Error('configuración inválida');
+    return r.valor.estado;
+  };
+
+  it('ronda ganada y perdida, con los puntos finales en centésimas', () => {
+    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 523_450 })).toBe('Ronda ganada · 5234,50 puntos');
+    expect(describirFinDeRonda({ ...estado(), fase: 'perdida', puntos: 4_007 })).toBe('Ronda perdida · 40,07 puntos');
+  });
+
+  it('con la ronda en juego no hay texto de fin', () => {
+    expect(describirFinDeRonda(estado())).toBeNull();
+  });
+
+  it('formatearPuntos usa aritmética entera con dos decimales', () => {
+    expect([0, 5, 100, 150, 523_450].map(formatearPuntos)).toEqual(['0,00', '0,05', '1,00', '1,50', '5234,50']);
   });
 });

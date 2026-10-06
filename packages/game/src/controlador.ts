@@ -1,5 +1,5 @@
 // Controlador puro de la interfaz, sobre la interfaz pública del núcleo: qué grano está seleccionado y qué acción
-// de `core` dispara cada gesto. Nunca lanza ni muta; no conoce `Confirmar` (llega en T3.3).
+// de `core` dispara cada gesto. Nunca lanza ni muta.
 import { aplicar } from '@pila/core';
 import type { ErrorAccion, Estado, Evento, Resultado } from '@pila/core';
 
@@ -21,6 +21,9 @@ export type ErrorControlador =
 export type PasoInterfaz = { readonly ui: EstadoInterfaz; readonly eventos: readonly Evento[] };
 
 type ResultadoPaso = Resultado<PasoInterfaz, ErrorControlador>;
+
+/** Paso de `confirmar`: además, el estado de antes, cuya rejilla es el punto de partida de la cascada. */
+export type PasoConfirmar = PasoInterfaz & { readonly estadoAntes: Estado };
 
 const sinColocar = (estado: Estado, indice: number): boolean => estado.mano[indice]?.celda === null;
 
@@ -99,4 +102,16 @@ export function deshacerDesdeFicha(ui: EstadoInterfaz, indice: number): Resultad
   if (grano === undefined || grano.celda === null) return { ok: false, error: { tipo: 'GranoNoColocado', indice } };
   if (ui.estado.ordenColocacion.at(-1) !== indice) return { ok: false, error: { tipo: 'NoEsLaUltimaColocacion', indice } };
   return deshacer(ui);
+}
+
+/**
+ * Confirma la tirada con `Confirmar` de `core`. En el estado de interfaz nuevo se selecciona el grano de menor
+ * índice sin colocar de la mano nueva, o ninguno si la ronda terminó. Los errores del núcleo (`ManoIncompleta`,
+ * `ResolucionNoTermino`…) se devuelven tal cual.
+ */
+export function confirmar(ui: EstadoInterfaz): Resultado<PasoConfirmar, ErrorControlador> {
+  const paso = aplicar(ui.estado, { tipo: 'Confirmar' });
+  if (!paso.ok) return paso;
+  const { estado, eventos } = paso.valor;
+  return { ok: true, valor: { ui: { estado, seleccionado: primeroSinColocar(estado) }, eventos, estadoAntes: ui.estado } };
 }

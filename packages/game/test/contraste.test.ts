@@ -111,3 +111,33 @@ describe('contraste de la candidata y del mensaje de error (WCAG)', () => {
     expect(contraste(colores.error, colores.fondo)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe('contraste de la animación y del botón Confirmar (WCAG)', () => {
+  const superficies: [string, number | undefined][] = [
+    ['el fondo', colores.fondo],
+    ['la celda vacía', colores.carga[0]],
+    ['la carga 1', colores.carga[1]],
+    ['la carga 2', colores.carga[2]],
+    ['la carga 3', colores.carga[3]],
+    ['la celda inestable', colores.inestable],
+  ];
+
+  it('los granos en vuelo, relleno claro con contorno oscuro, se ven sobre el fondo y sobre cada celda (peor caso al menos 3)', () => {
+    const { relleno, contorno } = TEMA.animacion.granoVuelo;
+    // Basta con que el relleno o el contorno contraste con la superficie; se mide el peor caso de todas.
+    const peor = Math.min(
+      ...superficies.map(([, s]) => {
+        const sup = s ?? colores.fondo;
+        return Math.max(contraste(relleno, sup), contraste(contorno, sup));
+      }),
+    );
+    expect(superficies.every(([, s]) => s !== undefined)).toBe(true);
+    expect(peor).toBeGreaterThanOrEqual(3);
+  });
+
+  it('el botón Confirmar activo destaca sobre el fondo y su texto se lee (al menos 4,5)', () => {
+    const { activo } = TEMA.botonPrimario;
+    expect(contraste(activo.fondo, colores.fondo)).toBeGreaterThanOrEqual(4.5);
+    expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+});

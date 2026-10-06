@@ -4,14 +4,15 @@
 export type AccionTecla =
   | { readonly tipo: 'seleccionar'; readonly indice: number }
   | { readonly tipo: 'ciclar'; readonly direccion: 1 | -1 }
-  | { readonly tipo: 'deshacer' };
+  | { readonly tipo: 'deshacer' }
+  | { readonly tipo: 'aceptar' };
 
 /** Lo que importa de una pulsación: la tecla (`KeyboardEvent.key`) y los modificadores. */
 export type Pulsacion = { readonly tecla: string; readonly ctrl: boolean; readonly alt: boolean; readonly meta: boolean };
 
 /**
  * Teclas `1` a `9`: seleccionar el grano de índice número − 1. Flechas izquierda y derecha: ciclar −1 y +1.
- * `z`, `Z` y Retroceso: deshacer. Cualquier otra tecla, o con Ctrl, Alt o Meta pulsado (atajos del sistema y del
+ * `z`, `Z` y Retroceso: deshacer. Intro y Espacio: aceptar (confirmar, o saltar la animación). Cualquier otra tecla, o con Ctrl, Alt o Meta pulsado (atajos del sistema y del
  * navegador): `null`. Mayúsculas no cuenta como modificador, para que `Z` funcione.
  */
 export function accionDeTecla({ tecla, ctrl, alt, meta }: Pulsacion): AccionTecla | null {
@@ -26,6 +27,9 @@ export function accionDeTecla({ tecla, ctrl, alt, meta }: Pulsacion): AccionTecl
     case 'Z':
     case 'Backspace':
       return { tipo: 'deshacer' };
+    case 'Enter':
+    case ' ':
+      return { tipo: 'aceptar' };
     default:
       return null;
   }
