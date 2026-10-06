@@ -41,7 +41,8 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number): Pro
       style: {
         fontFamily: tipografia.familia,
         fontSize: Math.max(1, d.bandaSuperior.alto * proporciones.textoInformacion),
-        fill: colores.textoSecundario,
+        fontWeight: tipografia.pesoInformacion,
+        fill: colores.texto,
       },
     });
     informacion.anchor.set(0.5);
@@ -53,18 +54,30 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number): Pro
       const r = d.celdas[c.y]?.[c.x];
       if (r === undefined) continue;
       const fondo = new Graphics().roundRect(r.x, r.y, r.ancho, r.alto, r.ancho * proporciones.radioCelda).fill(c.color);
-      const numero = new Text({
-        text: c.texto,
-        style: {
-          fontFamily: tipografia.familia,
-          fontWeight: tipografia.pesoCarga,
-          fontSize: Math.max(1, r.ancho * proporciones.textoCelda),
-          fill: colores.texto,
-        },
-      });
-      numero.anchor.set(0.5);
-      numero.position.set(r.x + r.ancho / 2, r.y + r.alto / 2);
-      capa.addChild(fondo, numero);
+      capa.addChild(fondo);
+      const centroX = r.x + r.ancho / 2;
+      const centroY = r.y + r.alto / 2;
+      if (c.granos.length > 0) {
+        const puntos = new Graphics();
+        for (const g of c.granos) {
+          puntos.circle(centroX + g.x * r.ancho, centroY + g.y * r.alto, c.radioGrano * r.ancho).fill(colores.grano);
+        }
+        capa.addChild(puntos);
+      }
+      if (c.texto !== undefined) {
+        const numero = new Text({
+          text: c.texto,
+          style: {
+            fontFamily: tipografia.familia,
+            fontWeight: tipografia.pesoCarga,
+            fontSize: Math.max(1, r.ancho * proporciones.textoCelda),
+            fill: colores.grano,
+          },
+        });
+        numero.anchor.set(0.5);
+        numero.position.set(centroX, centroY);
+        capa.addChild(numero);
+      }
     }
   };
 
