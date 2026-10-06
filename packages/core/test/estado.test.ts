@@ -32,10 +32,10 @@ describe('validarEstado', () => {
   });
 
   it.each<[string, Estado]>([
-    ['ganada con puntos >= meta y tiradas restantes', estadoDePrueba({ fase: 'ganada', puntos: 1000, tiradasRestantes: 2 })],
+    ['ganada con puntos >= meta y tiradas restantes', estadoDePrueba({ fase: 'ganada', puntos: 5000, tiradasRestantes: 2 })],
     ['ganada en la última tirada', estadoDePrueba({ fase: 'ganada', puntos: 5000, tiradasRestantes: 0 })],
-    ['perdida con puntos < meta y 0 tiradas', estadoDePrueba({ fase: 'perdida', puntos: 999, tiradasRestantes: 0 })],
-    ['colocando con puntos < meta y 1 tirada', estadoDePrueba({ puntos: 999, tiradasRestantes: 1 })],
+    ['perdida con puntos < meta y 0 tiradas', estadoDePrueba({ fase: 'perdida', puntos: 4999, tiradasRestantes: 0 })],
+    ['colocando con puntos < meta y 1 tirada', estadoDePrueba({ puntos: 4999, tiradasRestantes: 1 })],
     ['granos colocados en cualquier orden', colocada],
   ])('acepta el estado coherente: %s', (_, estado) => {
     expect(validarEstado(estado)).toEqual({ ok: true, valor: estado });
@@ -71,10 +71,10 @@ describe('validarEstado', () => {
     ['un flujo de 3 palabras', conCampo(base, 'rng', { siembra: [1, 2, 3, 4], mazo: [5, 6, 7] }), 'rng.mazo'],
     ['un flujo de más', conCampo(base, 'rng', { ...base.rng, bonus: [1, 2, 3, 4] }), 'rng.bonus'],
     ['un flujo de menos', conCampo(base, 'rng', { siembra: [1, 2, 3, 4] }), 'rng.mazo'],
-    ['ganada con puntos < meta', estadoDePrueba({ fase: 'ganada', puntos: 999 }), 'fase'],
-    ['perdida con puntos >= meta', estadoDePrueba({ fase: 'perdida', puntos: 1000, tiradasRestantes: 0 }), 'fase'],
+    ['ganada con puntos < meta', estadoDePrueba({ fase: 'ganada', puntos: 4999 }), 'fase'],
+    ['perdida con puntos >= meta', estadoDePrueba({ fase: 'perdida', puntos: 5000, tiradasRestantes: 0 }), 'fase'],
     ['perdida con tiradas restantes', estadoDePrueba({ fase: 'perdida', puntos: 0, tiradasRestantes: 1 }), 'fase'],
-    ['colocando con puntos >= meta', estadoDePrueba({ puntos: 1000 }), 'fase'],
+    ['colocando con puntos >= meta', estadoDePrueba({ puntos: 5000 }), 'fase'],
     ['colocando con 0 tiradas', estadoDePrueba({ tiradasRestantes: 0 }), 'fase'],
     ['ordenColocacion con repetidos', { ...colocada, ordenColocacion: [2, 0, 2] }, 'ordenColocacion[2]'],
     ['ordenColocacion con un índice fuera de la mano', { ...colocada, ordenColocacion: [2, 0, 5] }, 'ordenColocacion[2]'],

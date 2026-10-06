@@ -12,13 +12,13 @@ import { sumarAdiciones } from './oraculos.ts';
 
 const suma = (celdas: Celdas): number => celdas.flat().reduce((a, b) => a + b, 0);
 
-/** Paso 1 y oleadas con los parámetros de CONFIG_INICIAL, exigiendo que la resolución termine. */
+/** Paso 1 y oleadas con los parámetros de CONFIG_INICIAL y el multiplicador 10 de los ejemplos de oro, exigiendo que la resolución termine. */
 function tirada(celdas: Celdas, colocaciones: readonly Colocacion[]) {
   const adiciones = aplicarAdiciones(celdas, colocaciones);
   const resultado = resolverOleadas(adiciones.celdas, {
     lado: celdas.length,
     umbral: CONFIG_INICIAL.umbral,
-    multiplicadorPorOleada: CONFIG_INICIAL.multiplicadorPorOleada,
+    multiplicadorPorOleada: 10,
     topeOleadas: CONFIG_INICIAL.topeOleadas,
   });
   if (!resultado.ok) throw new Error('la resolución no terminó');

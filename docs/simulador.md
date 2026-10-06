@@ -114,7 +114,7 @@ Ningún bot de esta lista usa `Deshacer`. Todos colocan primero el grano sin col
 | `avaro` | Coloca el grano en la celda con más granos actuales, interior incluido; en empate, la primera por filas. Sin azar. | La voracidad pura: cargar la celda más llena para provocar derrumbes cuanto antes. | Solo mira la carga actual, no el tipo de grano ni el efecto en los vecinos, y no espera a acumular. Al incluir el interior, sus cascadas suelen empezar lejos del borde. |
 | `cargador` | «Llena celdas hasta 3 y detona al final». En la última tirada coloca cada grano en la celda más cercana al centro (mínimo de `\|2x − (lado−1)\| + \|2y − (lado−1)\|`, empate por filas). En las demás proyecta el efecto del grano con `DEFINICIONES_GRANOS`, contando las colocaciones provisionales de la tirada, y entre las celdas donde nadie llega al umbral elige la de mayor carga proyectada en la propia celda (empate por filas). Si no hay ninguna, detona en la más cercana al centro. Sin azar. | Una estrategia de acumulación: cargar sin derrumbar para provocar una gran avalancha final. Mide si el multiplicador de cadena premia esperar. | Solo mira una tirada de profundidad: proyecta las adiciones, no resuelve oleadas ni anticipa la mano siguiente. La detonación es una heurística sencilla: el centro y la última tirada, sin buscar la celda que más cascada provoca. Si una detonación forzada deja una celda provisional en el umbral, el resto de la tirada ya no encuentra celdas válidas y también detona. |
 
-Con `CONFIG_INICIAL` (meta 1000) y 20000 rondas, los cinco bots ganan el 100 % de las rondas: la meta inicial está por calibrar en H2 (T2.5), y por ahora no distingue entre bots.
+Con `CONFIG_INICIAL` (multiplicador 50, meta 5000, calibrados en T2.5) y 20000 rondas con semilla inicial 1, el aleatorio gana el 50,35 % de las rondas, el cargador el 68,83 % y el borde el 41,39 %. Los detalles están en «Calibración provisional de las rondas 1 a 3 (T2.5)».
 
 ## Informe de métricas de balance
 
@@ -199,3 +199,28 @@ Para un objetivo `o` y los `n` potenciales del aleatorio, la meta objetivo es el
 - **B) Metas objetivo:** por lado, multiplicador y objetivo, la meta objetivo, en puntos.
 - **C) Habilidad:** por lado, multiplicador y objetivo, la tasa de victoria de los cinco bots con la meta objetivo (derivada de los potenciales) y la ventaja de habilidad del mejor de `avaro` y `cargador` sobre el aleatorio, con su intervalo emparejado y la marca de la alarma (f). Usa las mismas funciones que el informe.
 - **D) Avalanchas:** por lado, con el primer multiplicador de la lista (el multiplicador no cambia las avalanchas, porque los bots no miran los puntos), por bot: tamaño medio, mediana, percentil 90, máximo, parte del total de derrumbes del 10 % mayor y oleadas máximas en una tirada.
+
+## Calibración provisional de las rondas 1 a 3 (T2.5)
+
+El barrido de T2.5a mostró que el multiplicador de cadena es la palanca de habilidad. La ronda 1 fija `multiplicadorPorOleada` en 50 y `meta` en 5000 en `CONFIG_INICIAL`; el resto de campos no cambia (lado 3, umbral 4, tiradas 5, tamanoMano 5, siembra 0 a 2, mazo 20/6/4, topeOleadas 1000). La prueba `packages/sim/test/calibracion.test.ts` protege esta calibración: si falla tras un cambio de reglas, hay que recalibrar con `barrido`, no relajar sus umbrales.
+
+| Ronda | Lado | Meta (centésimas) | Multiplicador | Aleatorio | Avaro | Borde | Cargador | Cíclico |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 3 | 5000 | 50 | 50,35 % | 65,97 % | 41,39 % | 68,83 % | 50,84 % |
+| 2 (provisional) | 4 | 4650 | 50 | 51,26 % | 46,71 % | 30,26 % | 85,35 % | 56,49 % |
+| 3 (provisional) | 5 | 4250 | 50 | 30,09 % | 45,37 % | 39,18 % | 70,99 % | 32,00 % |
+
+Tasas de victoria con 20000 rondas y semilla inicial 1, medidas con `simular`; coinciden exactamente con las que deriva el barrido. Para reproducir cada ronda, con `<bot>` uno de `aleatorio`, `avaro`, `borde`, `cargador` o `ciclico`:
+
+```sh
+# Ronda 1
+pnpm --filter @pila/sim simular -- --bot <bot> --rondas 20000 --semilla 1 --salida resultados/t25b-r1-<bot>.jsonl
+# Ronda 2 (provisional)
+pnpm --filter @pila/sim simular -- --bot <bot> --rondas 20000 --semilla 1 --set lado=4 --set meta=4650 --salida resultados/t25b-r2-<bot>.jsonl
+# Ronda 3 (provisional)
+pnpm --filter @pila/sim simular -- --bot <bot> --rondas 20000 --semilla 1 --set lado=5 --set meta=4250 --salida resultados/t25b-r3-<bot>.jsonl
+# Informe de los 15 archivos
+pnpm --filter @pila/sim informe -- resultados/t25b-*.jsonl --estricto
+```
+
+Las metas de las rondas 2 y 3 son provisionales y no suben con el lado: con mano y tiradas fijas, los puntos bajan al crecer la rejilla, porque hay más celdas que cargar y los granos tardan más en llegar al borde. T6.2 definirá la curva real de dificultad entre rondas.

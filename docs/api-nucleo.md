@@ -71,7 +71,7 @@ console.log(`reproducible: ${repeticion.ok && serializar(repeticion.valor.estado
 | `enteroEnRango` | `(flujo: EstadoFlujo, min: number, max: number) => readonly [number, EstadoFlujo]` | Entero uniforme en `[min, max]`, sin sesgo de módulo. |
 | `barajar` | `<T>(items: readonly T[], flujo: EstadoFlujo) => readonly [T[], EstadoFlujo]` | Fisher–Yates sobre una copia. |
 
-Datos: `CONFIG_INICIAL` (la configuración de partida, que se recalibra en H2) y `DEFINICIONES_GRANOS` (las adiciones de cada tipo de grano como tabla de desplazamientos).
+Datos: `CONFIG_INICIAL` (la configuración de la ronda 1, calibrada en T2.5: `multiplicadorPorOleada` 50 y `meta` 5000) y `DEFINICIONES_GRANOS` (las adiciones de cada tipo de grano como tabla de desplazamientos).
 
 Tipos: `Config`, `Estado`, `Accion`, `Evento` y cada evento por separado, `Resultado`, `TipoGrano`, `Fase`, `GranoMano`, `Direccion`, `EstadoFlujo`, `NombreFlujo`, `EstadoRng`, `DefinicionGrano` y los errores (`ErrorConfig`, `ErrorEstado`, `ErrorDeserializacion`, `ErrorResolucion`, `ErrorAccion`, `MotivoIlegal` y `ErrorReproduccion`). Cada uno lleva su TSDoc en el código.
 

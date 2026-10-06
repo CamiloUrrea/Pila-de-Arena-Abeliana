@@ -244,8 +244,8 @@ describe('agrupación y tabla cruzada', () => {
       archivo('borde', rondas(4, 4), { meta: 2000 }),
     ]);
     expect(a.configuraciones).toEqual([
-      'meta=2000, lado=3, tiradas=5, tamanoMano=5, multiplicadorPorOleada=10',
-      'meta=3000, lado=3, tiradas=5, tamanoMano=5, multiplicadorPorOleada=10',
+      'meta=2000, lado=3, tiradas=5, tamanoMano=5, multiplicadorPorOleada=50',
+      'meta=3000, lado=3, tiradas=5, tamanoMano=5, multiplicadorPorOleada=50',
     ]);
     const texto = renderizar(a);
     expect(texto).toContain('| avaro | 50,00 % | 25,00 % |');

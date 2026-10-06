@@ -56,7 +56,7 @@ describe('línea de comandos: configuración', () => {
     expect(cabecera(archivo).config).toMatchObject({
       siembra: { min: 0, max: 3 },
       mazo: { normal: 20, pesado: 6, explosivo: 8 },
-      meta: 1000,
+      meta: 5000,
     });
   });
 

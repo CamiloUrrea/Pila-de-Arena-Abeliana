@@ -14,8 +14,8 @@ describe('validarConfig', () => {
       tamanoMano: 5,
       siembra: { min: 0, max: 2 },
       mazo: { normal: 20, pesado: 6, explosivo: 4 },
-      meta: 1000,
-      multiplicadorPorOleada: 10,
+      meta: 5000,
+      multiplicadorPorOleada: 50,
       topeOleadas: 1000,
     });
   });

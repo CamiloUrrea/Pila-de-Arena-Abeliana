@@ -88,7 +88,7 @@ describe('deserializar rechaza', () => {
     ['sin formato', texto.replace(',"formato":1', ''), { tipo: 'FormatoDesconocido' }],
     ['una clave extra en la envoltura', texto.replace('"formato":1', '"formato":1,"x":0'), { tipo: 'FormatoDesconocido' }],
     ['sin puntos', texto.replace('"puntos":0,', ''), { tipo: 'EstadoInvalido', campo: 'puntos' }],
-    ['sin config.meta', texto.replace('"meta":1000,', ''), { tipo: 'EstadoInvalido', campo: 'config.meta' }],
+    ['sin config.meta', texto.replace('"meta":5000,', ''), { tipo: 'EstadoInvalido', campo: 'config.meta' }],
     ['un campo extra', texto.replace('"puntos":0', '"puntos":0,"vidas":3'), { tipo: 'EstadoInvalido', campo: 'vidas' }],
     [
       'un campo extra anidado',

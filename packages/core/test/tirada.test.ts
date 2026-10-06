@@ -10,10 +10,10 @@ import { arbEstadoListoParaConfirmar, congelar, conMano, estadoDePrueba } from '
 
 const suma = (celdas: Celdas): number => celdas.flat().reduce((a, b) => a + b, 0);
 
-/** Estado de los ejemplos de oro: tamanoMano 1, 5 tiradas, ninguna jugada y 0 puntos. */
+/** Estado de los ejemplos de oro: tamanoMano 1, 5 tiradas, multiplicadorPorOleada 10 (el de la especificación), ninguna jugada y 0 puntos. */
 function estadoOro(celdas: Celdas, mano: readonly GranoMano[], config: Partial<Config> = {}): Estado {
   const base = estadoDePrueba({
-    config: { ...CONFIG_INICIAL, lado: celdas.length, tamanoMano: 1, tiradas: 5, ...config },
+    config: { ...CONFIG_INICIAL, lado: celdas.length, tamanoMano: 1, tiradas: 5, multiplicadorPorOleada: 10, ...config },
     celdas,
     tiradasRestantes: 5,
     puntos: 0,

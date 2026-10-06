@@ -68,8 +68,8 @@ describe('simularLote', () => {
     expect(lineas).toHaveLength(3);
     expect(lineas[0]).toBe(
       '{"tipo":"cabecera","formato":1,"bot":"ciclico","config":{"lado":3,"umbral":4,"tiradas":5,"tamanoMano":5,' +
-        '"siembra":{"min":0,"max":2},"mazo":{"normal":20,"pesado":6,"explosivo":4},"meta":1000,' +
-        '"multiplicadorPorOleada":10,"topeOleadas":1000},"semillaInicial":9,"desde":0,"rondas":2}',
+        '"siembra":{"min":0,"max":2},"mazo":{"normal":20,"pesado":6,"explosivo":4},"meta":5000,' +
+        '"multiplicadorPorOleada":50,"topeOleadas":1000},"semillaInicial":9,"desde":0,"rondas":2}',
     );
     for (const linea of lineas.slice(1)) {
       expect(Object.keys(JSON.parse(linea))).toEqual(['tipo', 'indice', 'semilla', 'fase', 'puntos', 'tiradas', 'porTirada']);
