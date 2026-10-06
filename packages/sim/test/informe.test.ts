@@ -167,6 +167,75 @@ describe('alarmas', () => {
   });
 });
 
+describe('meta inalcanzable: alarmas no evaluadas', () => {
+  it('(a) y (b) salen como «no evaluada» cuando nadie gana, y no como alarmas', async () => {
+    const a = await analizar([archivo('aleatorio', rondas(20, 0)), archivo('cargador', rondas(20, 0)), archivo('borde', rondas(20, 0))]);
+    expect([codigos(a, 'a'), codigos(a, 'b')]).toEqual([0, 0]);
+    expect(a.noEvaluadas.map((x) => x.codigo).sort()).toEqual(['a', 'b', 'f']);
+    const texto = renderizar(a);
+    expect(texto).toContain('(a) no evaluada: meta inalcanzable (nadie gana).');
+    expect(texto).toContain('(b) no evaluada: meta inalcanzable (nadie gana).');
+    expect(texto).not.toContain('Ninguna.');
+  });
+
+  it('basta con que gane un bot de la configuración para evaluarlas', async () => {
+    const a = await analizar([archivo('aleatorio', rondas(20, 0)), archivo('cargador', rondas(20, 1)), archivo('borde', rondas(20, 0))]);
+    expect([codigos(a, 'a'), codigos(a, 'b')]).toEqual([1, 1]);
+    expect(a.noEvaluadas).toEqual([]);
+  });
+
+  it('las no evaluadas no cuentan para --estricto', async () => {
+    const r = await informe(archivo('aleatorio', rondas(20, 0, { tiradas: [[1, 1], [2, 5]] })), '--estricto');
+    expect(r.texto).toContain('## Alarmas\n\n- **aleatorio');
+    expect(r.texto).toContain('(a) no evaluada');
+    expect(r.codigo).toBe(0);
+  });
+});
+
+describe('(f) ventaja de habilidad', () => {
+  expect(UMBRALES_ALARMA.ventajaHabilidadMinimaPp).toBe(10);
+
+  it('salta con una ventaja de 4 pp del mejor (cargador) sobre el aleatorio', async () => {
+    const a = await analizar([archivo('aleatorio', rondas(100, 50)), archivo('avaro', rondas(100, 52)), archivo('cargador', rondas(100, 54))]);
+    const [h] = a.habilidades;
+    expect(h?.mejor).toBe('cargador');
+    expect(h?.diferencia.n).toBe(100);
+    expect(h?.diferencia.media).toBeCloseTo(0.04, 12);
+    expect(codigos(a, 'f')).toBe(1);
+    expect(renderizar(a)).toContain('## Ventaja de habilidad');
+  });
+
+  it('no salta con una ventaja de 12 pp (el mejor es el avaro)', async () => {
+    const a = await analizar([archivo('aleatorio', rondas(100, 50)), archivo('avaro', rondas(100, 62)), archivo('cargador', rondas(100, 40))]);
+    expect(a.habilidades[0]?.mejor).toBe('avaro');
+    expect(a.habilidades[0]?.diferencia.media).toBeCloseTo(0.12, 12);
+    expect(codigos(a, 'f')).toBe(0);
+  });
+
+  it('no se evalúa si nadie gana', async () => {
+    const a = await analizar([archivo('aleatorio', rondas(100, 0)), archivo('avaro', rondas(100, 0))]);
+    expect(codigos(a, 'f')).toBe(0);
+    expect(a.noEvaluadas.filter((x) => x.codigo === 'f')).toHaveLength(1);
+    expect(renderizar(a)).toContain('(f) no evaluada: meta inalcanzable (nadie gana).');
+  });
+
+  it('empareja por semilla, no por posición, y usa la intersección', async () => {
+    // El aleatorio gana las semillas pares de 0..9, escritas al revés; el cargador gana 0..11.
+    const aleatorio = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map((semilla) => ({ semilla, ganada: semilla % 2 === 0 }));
+    const cargador = rondas(12, 12);
+    const a = await analizar([archivo('aleatorio', aleatorio), archivo('cargador', cargador)]);
+    const [h] = a.habilidades;
+    expect(h?.diferencia.n).toBe(10);
+    expect(h?.diferencia.media).toBeCloseTo(0.5, 12);
+    expect(renderizar(a)).toContain('10 (intersección; cargador 12, aleatorio 10)');
+  });
+
+  it('sin aleatorio, o sin avaro ni cargador, no hay ventaja de habilidad', async () => {
+    expect((await analizar([archivo('avaro', rondas(10, 5)), archivo('cargador', rondas(10, 5))])).habilidades).toEqual([]);
+    expect((await analizar([archivo('aleatorio', rondas(10, 5)), archivo('borde', rondas(10, 5))])).habilidades).toEqual([]);
+  });
+});
+
 describe('agrupación y tabla cruzada', () => {
   it('dos metas de un bot y otro bot dan la tabla cruzada con sus porcentajes', async () => {
     const a = await analizar([
@@ -213,7 +282,7 @@ describe('de punta a punta con el simulador', () => {
     const r = await informe(...rutas);
     expect(r.codigo).toBe(0);
     for (const [bot, n] of ganadas) expect(r.texto).toMatch(new RegExp(`\\| ${bot} \\| [^|]+ \\| 200 \\| ${n} \\|`));
-    for (const seccion of ['Resumen', 'Victorias', 'Ventaja del cargador sobre el borde', 'Puntos de desborde por ronda', 'Avalanchas', 'Oleadas máximas', 'Bonus', 'Alarmas']) {
+    for (const seccion of ['Resumen', 'Victorias', 'Ventaja del cargador sobre el borde', 'Ventaja de habilidad', 'Puntos de desborde por ronda', 'Avalanchas', 'Oleadas máximas', 'Bonus', 'Alarmas']) {
       expect(r.texto).toContain(`## ${seccion}`);
     }
     expect(r.texto).toContain('No disponible hasta H5.');

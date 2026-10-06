@@ -136,6 +136,7 @@ Lee uno o varios archivos JSONL del simulador, línea a línea (sin cargarlos en
 | Resumen | Archivos y rondas | Archivos leídos con su bot y sus rondas, y rondas por grupo. |
 | Victorias | Victorias e intervalo | Ganadas entre rondas, con su intervalo de Wilson al 95 %. Si hay más de una configuración y más de un bot, también una tabla cruzada de victorias: bots en filas y configuraciones en columnas. |
 | Ventaja del cargador sobre el borde | Diferencia por pares | En cada configuración con los dos bots, se emparejan las rondas por `semilla` (solo la intersección, cuyo tamaño se indica si los conjuntos difieren). Para cada semilla, `d = ganaCargador − ganaBorde` (1, 0 o −1). Se informa la media de `d` con su intervalo al 95 %. |
+| Ventaja de habilidad | Diferencia por pares | En cada configuración con el bot `aleatorio` y al menos uno de `avaro` o `cargador`, se toma el mejor de esos dos (el de mayor tasa de victoria en la configuración; en empate, `avaro`) y se calcula la diferencia de victorias `ganaMejor − ganaAleatorio`, emparejada por semilla igual que la del cargador sobre el borde, con su intervalo al 95 % y la marca de la alarma (f). |
 | Puntos de desborde | Media, desviación, mínimo y máximo | De los puntos finales de cada ronda, en puntos (centésimas entre 100). Los grupos con rondas ganadas llevan la nota: **los puntos de las rondas ganadas están truncados por la victoria; para medir la varianza real usa una meta inalcanzable** (por ejemplo `--set meta=1000000`). |
 | Avalanchas | Tamaño | Derrumbes de una tirada. Sobre las tiradas con al menos un derrumbe: número, media, desviación, mediana, percentil 90, máximo, histograma en los tramos 1–2, 3–5, 6–10, 11–20 y 21 o más, y la parte del total de derrumbes que causa el 10 % de avalanchas más grandes (las ⌈0,1·n⌉ mayores). También el porcentaje de tiradas sin ningún derrumbe. Todo se calcula con un recuento por tamaño, sin guardar cada tirada. |
 | Oleadas máximas | Máximo y tope | El máximo de oleadas en una sola tirada y su fracción de `topeOleadas`. |
@@ -159,3 +160,42 @@ Los umbrales son constantes con nombre en `UMBRALES_ALARMA` (`packages/sim/src/i
 | (c) | La desviación de los puntos es mayor que la media en un grupo. | — |
 | (d) | Las avalanchas son casi todas del mismo tamaño: coeficiente de variación (desviación entre media) menor que el umbral. | `coeficienteVariacionMinimo` 0,3 |
 | (e) | Las oleadas máximas llegan a una fracción de `topeOleadas` o más. | `fraccionTopeOleadas` 0,5 |
+| (f) | La ventaja de habilidad es pequeña: la diferencia media de victorias entre el mejor de `avaro` y `cargador` y el `aleatorio` es menor que el umbral. Un juego en el que la estrategia apenas gana al azar no premia la habilidad. | `ventajaHabilidadMinimaPp` 10 pp (umbral inicial, revisable) |
+
+**Configuraciones en las que nadie gana.** Si ningún grupo de una configuración gana ninguna ronda (por ejemplo, con una meta inalcanzable), las alarmas (a), (b) y (f) no se evalúan: no tienen sentido cuando todas las tasas de victoria son 0. En su lugar, la sección de alarmas muestra «no evaluada: meta inalcanzable (nadie gana)». Estas líneas no son alarmas y no cuentan para `--estricto`.
+
+## Barrido de configuraciones
+
+```sh
+pnpm --filter @pila/sim barrido -- --lados 3,4,5 --multiplicadores 10,25,50,100 --rondas 20000 [--semilla 1] [--objetivos 0.7,0.5,0.3] [--salida barrido.md]
+```
+
+Para cada combinación de `lado` y `multiplicadorPorOleada` parte de `CONFIG_INICIAL` (el resto de campos fijo), pone `meta` a 1 000 000, valida la configuración con `validarConfig` y simula los cinco bots una vez, en memoria, con las semillas del simulador (`semillaInicial + i`). Escribe por pantalla un informe en Markdown y, con `--salida`, también lo guarda. El progreso y los tiempos van a la salida de error y nunca al informe, que es determinista.
+
+| Opción | Obligatoria | Por defecto | Significado |
+| --- | --- | --- | --- |
+| `--lados` | sí | — | Lista separada por comas de enteros de 1 a 8. |
+| `--multiplicadores` | sí | — | Lista de enteros mayores o iguales que 0, en centésimas. |
+| `--rondas <n>` | sí | — | Rondas por bot y combinación (al menos 1). |
+| `--semilla <s>` | no | `1` | Semilla inicial, entero de 0 a 4294967295. |
+| `--objetivos` | no | `0.7,0.5,0.3` | Tasas de victoria objetivo del aleatorio, cada una estrictamente entre 0 y 1. |
+| `--salida <ruta>` | no | — | Archivo donde guardar también el informe. |
+
+Códigos de salida: `0` si terminó; `2` ante un error de uso (opción desconocida, valor fuera de rango, no entero o repetido en una lista, opción obligatoria ausente) o una configuración que `validarConfig` rechaza; `1` si la simulación falla, incluido el caso de que alguna ronda alcance la meta de 1 000 000.
+
+### Propiedad del potencial
+
+El **potencial** de una semilla es el número de puntos finales de su ronda jugada con una meta inalcanzable. Ningún bot actual mira la meta (sus decisiones no cambian con ella) y los puntos nunca bajan durante la ronda. La ronda de esa semilla con meta M recorre por tanto las mismas tiradas hasta que, al final de una, los puntos llegan a M; como los puntos solo suben, eso ocurre en alguna tirada si y solo si ocurre al final de la última. Así, **la ronda se gana con meta M si y solo si su potencial es mayor o igual que M**, y una sola simulación con meta inalcanzable por configuración y bot da la tasa de victoria con cualquier meta. Una prueba lo comprueba: para cada bot, lados 3 y 4 y multiplicadores 10 y 50, las victorias derivadas coinciden exactamente con las de simular con cinco metas distintas.
+
+**Límite.** Solo vale para bots que no miran la meta (ni los puntos que faltan para ella). Si un bot futuro la usa, sus decisiones cambian con la meta y hay que simular con la meta real.
+
+### Meta objetivo
+
+Para un objetivo `o` y los `n` potenciales del aleatorio, la meta objetivo es el mayor entero M (en centésimas) para el que la tasa de victoria del aleatorio es mayor o igual que `o`. Es exactamente el elemento de posición `⌈o·n⌉` (desde 1) de los potenciales ordenados de mayor a menor: con esa meta ganan al menos esas `⌈o·n⌉` semillas, y con una unidad más ganan solo las de potencial estrictamente mayor, que son menos de `⌈o·n⌉`. La posición se calcula con aritmética entera sobre la escritura decimal del objetivo, para que, por ejemplo, `0,7 · 20000` dé 14000 y no 14001 por el redondeo binario. Por ejemplo, con los potenciales [1000, 2000, 3000, 4000, 5000], el objetivo 0,5 da la posición 3 y la meta 3000.
+
+### Tablas
+
+- **A) Potencial:** por lado, multiplicador y bot, media y desviación de los potenciales, en puntos.
+- **B) Metas objetivo:** por lado, multiplicador y objetivo, la meta objetivo, en puntos.
+- **C) Habilidad:** por lado, multiplicador y objetivo, la tasa de victoria de los cinco bots con la meta objetivo (derivada de los potenciales) y la ventaja de habilidad del mejor de `avaro` y `cargador` sobre el aleatorio, con su intervalo emparejado y la marca de la alarma (f). Usa las mismas funciones que el informe.
+- **D) Avalanchas:** por lado, con el primer multiplicador de la lista (el multiplicador no cambia las avalanchas, porque los bots no miran los puntos), por bot: tamaño medio, mediana, percentil 90, máximo, parte del total de derrumbes del 10 % mayor y oleadas máximas en una tirada.

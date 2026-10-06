@@ -13,6 +13,7 @@ export const UMBRALES_ALARMA: {
   readonly aleatorioMinimo: number;
   readonly coeficienteVariacionMinimo: number;
   readonly fraccionTopeOleadas: number;
+  readonly ventajaHabilidadMinimaPp: number;
 } = {
   /** (a) El bot aleatorio gana más de esta fracción de rondas: la configuración es demasiado fácil. */
   aleatorioMaximo: 0.9,
@@ -22,7 +23,18 @@ export const UMBRALES_ALARMA: {
   coeficienteVariacionMinimo: 0.3,
   /** (e) Fracción de `topeOleadas` a partir de la cual las oleadas máximas son sospechosas. */
   fraccionTopeOleadas: 0.5,
+  /**
+   * (f) Ventaja mínima, en puntos porcentuales, del mejor bot con estrategia (avaro o cargador) sobre el aleatorio.
+   * Umbral inicial, revisable.
+   */
+  ventajaHabilidadMinimaPp: 10,
 };
+
+/** Bots con estrategia que se comparan con el aleatorio en la alarma (f), en orden de preferencia ante empate. */
+export const BOTS_HABILIDAD: readonly string[] = ['avaro', 'cargador'];
+
+/** Texto de una alarma que no se evalúa porque ningún bot gana en la configuración. */
+export const NO_EVALUADA = 'no evaluada: meta inalcanzable (nadie gana)';
 
 /** Fracción de las avalanchas más grandes cuya parte del total de derrumbes se informa. */
 const FRACCION_MAYORES = 0.1;
@@ -112,7 +124,8 @@ function leerRonda(json: unknown, donde: string): Ronda {
 // ---------------------------------------------------------------------------------------------------------------
 // Agregación por grupo (bot y configuración), en streaming.
 
-class Grupo {
+/** Acumulador en streaming de las rondas de un grupo (bot y configuración). */
+export class Grupo {
   rondas = 0;
   ganadas = 0;
   /** Resultado por semilla, para emparejar bots. */
@@ -265,7 +278,26 @@ export type Ventaja = {
   readonly diferencia: DiferenciaPorPares;
 };
 
-export type Alarma = { readonly grupo: string; readonly codigo: 'a' | 'b' | 'c' | 'd' | 'e'; readonly mensaje: string };
+/** Resultados por semilla de un bot en una configuración: `true` si ganó la ronda de esa semilla. */
+export type ResultadosBot = { readonly bot: string; readonly porSemilla: ReadonlyMap<number, boolean> };
+
+export type Habilidad = {
+  /** El mejor de `BOTS_HABILIDAD` por tasa de victoria; en empate, el primero de la lista. */
+  readonly mejor: string;
+  readonly victoriasMejor: number;
+  readonly victoriasAleatorio: number;
+  readonly semillasMejor: number;
+  readonly semillasAleatorio: number;
+  /** Diferencia por pares de semilla, mejor menos aleatorio. */
+  readonly diferencia: DiferenciaPorPares;
+  /** Ningún bot de la configuración gana ninguna ronda: la alarma (f) no se evalúa. */
+  readonly nadieGana: boolean;
+};
+
+export type HabilidadPorConfig = Habilidad & { readonly etiquetaConfig: string };
+
+export type CodigoAlarma = 'a' | 'b' | 'c' | 'd' | 'e' | 'f';
+export type Alarma = { readonly grupo: string; readonly codigo: CodigoAlarma; readonly mensaje: string };
 
 export type Analisis = {
   readonly archivos: readonly ArchivoLeido[];
@@ -273,10 +305,59 @@ export type Analisis = {
   /** Etiquetas de las configuraciones, en orden. */
   readonly configuraciones: readonly string[];
   readonly ventajas: readonly Ventaja[];
+  readonly habilidades: readonly HabilidadPorConfig[];
   readonly alarmas: readonly Alarma[];
+  /** Alarmas que no se evalúan porque nadie gana en la configuración; no cuentan para `--estricto`. */
+  readonly noEvaluadas: readonly Alarma[];
 };
 
-function analizarAvalanchas(g: Grupo): Avalanchas {
+/** Tasa de victoria: fracción de semillas ganadas. */
+export function tasa(porSemilla: ReadonlyMap<number, boolean>): number {
+  let ganadas = 0;
+  for (const gana of porSemilla.values()) if (gana) ganadas++;
+  return porSemilla.size === 0 ? 0 : ganadas / porSemilla.size;
+}
+
+/** Diferencia de victorias `a − b` emparejada por semilla, sobre las semillas comunes y en orden de semilla. */
+export function diferenciaEmparejada(a: ReadonlyMap<number, boolean>, b: ReadonlyMap<number, boolean>): DiferenciaPorPares {
+  const diferencias: number[] = [];
+  for (const [semilla, ganaA] of [...a].sort(([x], [y]) => x - y)) {
+    const ganaB = b.get(semilla);
+    if (ganaB !== undefined) diferencias.push(Number(ganaA) - Number(ganaB));
+  }
+  return diferenciaPorPares(diferencias);
+}
+
+/**
+ * Ventaja de habilidad de una configuración: el mejor de `BOTS_HABILIDAD` frente al aleatorio, emparejado por
+ * semilla. `resultados` son todos los bots de la configuración; `undefined` si falta el aleatorio o los dos rivales.
+ */
+export function ventajaDeHabilidad(resultados: readonly ResultadosBot[]): Habilidad | undefined {
+  const aleatorio = resultados.find((r) => r.bot === 'aleatorio');
+  const candidatos = BOTS_HABILIDAD.flatMap((bot) => resultados.filter((r) => r.bot === bot));
+  if (aleatorio === undefined || candidatos.length === 0) return undefined;
+  const mejor = candidatos.reduce((a, b) => (tasa(b.porSemilla) > tasa(a.porSemilla) ? b : a));
+  return {
+    mejor: mejor.bot,
+    victoriasMejor: tasa(mejor.porSemilla),
+    victoriasAleatorio: tasa(aleatorio.porSemilla),
+    semillasMejor: mejor.porSemilla.size,
+    semillasAleatorio: aleatorio.porSemilla.size,
+    diferencia: diferenciaEmparejada(mejor.porSemilla, aleatorio.porSemilla),
+    nadieGana: resultados.every((r) => tasa(r.porSemilla) === 0),
+  };
+}
+
+/**
+ * Alarma (f): `true` si la ventaja media es menor que `ventajaHabilidadMinimaPp`, `false` si no, y `undefined` si
+ * no se evalúa porque nadie gana.
+ */
+export function saltaHabilidad(h: Habilidad): boolean | undefined {
+  if (h.nadieGana) return undefined;
+  return h.diferencia.media < UMBRALES_ALARMA.ventajaHabilidadMinimaPp / 100;
+}
+
+export function analizarAvalanchas(g: Grupo): Avalanchas {
   const r = g.avalanchas.resumen();
   return {
     tiradas: g.tiradas,
@@ -332,28 +413,46 @@ export async function analizar(rutas: readonly string[]): Promise<Analisis> {
     const cargador = ordenados.find((g) => g.bot === 'cargador' && g.claveConfig === clave);
     const borde = ordenados.find((g) => g.bot === 'borde' && g.claveConfig === clave);
     if (cargador === undefined || borde === undefined) continue;
-    const diferencias: number[] = [];
-    for (const [semilla, ganaCargador] of [...cargador.porSemilla].sort(([a], [b]) => a - b)) {
-      const ganaBorde = borde.porSemilla.get(semilla);
-      if (ganaBorde !== undefined) diferencias.push(Number(ganaCargador) - Number(ganaBorde));
-    }
     ventajas.push({
       etiquetaConfig: etiqueta(config),
       semillasCargador: cargador.porSemilla.size,
       semillasBorde: borde.porSemilla.size,
-      diferencia: diferenciaPorPares(diferencias),
+      diferencia: diferenciaEmparejada(cargador.porSemilla, borde.porSemilla),
     });
   }
 
-  return { archivos, grupos, configuraciones: configs.map(etiqueta), ventajas, alarmas: calcularAlarmas(grupos, ventajas) };
+  const habilidades: HabilidadPorConfig[] = [];
+  for (const config of configs) {
+    const clave = JSON.stringify(config);
+    const h = ventajaDeHabilidad(ordenados.filter((g) => g.claveConfig === clave));
+    if (h !== undefined) habilidades.push({ etiquetaConfig: etiqueta(config), ...h });
+  }
+
+  return {
+    archivos,
+    grupos,
+    configuraciones: configs.map(etiqueta),
+    ventajas,
+    habilidades,
+    ...calcularAlarmas(grupos, ventajas, habilidades),
+  };
 }
 
-function calcularAlarmas(grupos: readonly GrupoAnalizado[], ventajas: readonly Ventaja[]): Alarma[] {
+function calcularAlarmas(
+  grupos: readonly GrupoAnalizado[],
+  ventajas: readonly Ventaja[],
+  habilidades: readonly HabilidadPorConfig[],
+): { alarmas: Alarma[]; noEvaluadas: Alarma[] } {
   const alarmas: Alarma[] = [];
+  const noEvaluadas: Alarma[] = [];
   const u = UMBRALES_ALARMA;
+  /** Configuraciones en las que algún grupo gana: las alarmas (a), (b) y (f) solo se evalúan en ellas. */
+  const conVictorias = new Set(grupos.filter((g) => g.ganadas > 0).map((g) => g.etiquetaConfig));
   for (const g of grupos) {
     const grupo = `${g.bot} · ${g.etiquetaConfig}`;
-    if (g.bot === 'aleatorio' && g.rondas > 0 && (g.victorias > u.aleatorioMaximo || g.victorias < u.aleatorioMinimo)) {
+    if (g.bot === 'aleatorio' && g.rondas > 0 && !conVictorias.has(g.etiquetaConfig)) {
+      noEvaluadas.push({ grupo, codigo: 'a', mensaje: NO_EVALUADA });
+    } else if (g.bot === 'aleatorio' && g.rondas > 0 && (g.victorias > u.aleatorioMaximo || g.victorias < u.aleatorioMinimo)) {
       alarmas.push({
         grupo,
         codigo: 'a',
@@ -385,9 +484,12 @@ function calcularAlarmas(grupos: readonly GrupoAnalizado[], ventajas: readonly V
   }
   for (const v of ventajas) {
     const inferior = v.diferencia.intervalo?.inferior;
-    if (inferior === undefined || inferior <= 0) {
+    const grupo = `cargador frente a borde · ${v.etiquetaConfig}`;
+    if (!conVictorias.has(v.etiquetaConfig)) {
+      noEvaluadas.push({ grupo, codigo: 'b', mensaje: NO_EVALUADA });
+    } else if (inferior === undefined || inferior <= 0) {
       alarmas.push({
-        grupo: `cargador frente a borde · ${v.etiquetaConfig}`,
+        grupo,
         codigo: 'b',
         mensaje:
           inferior === undefined
@@ -396,25 +498,49 @@ function calcularAlarmas(grupos: readonly GrupoAnalizado[], ventajas: readonly V
       });
     }
   }
-  return alarmas;
+  for (const h of habilidades) {
+    const grupo = `${h.mejor} frente a aleatorio · ${h.etiquetaConfig}`;
+    const salta = saltaHabilidad(h);
+    if (salta === undefined) {
+      noEvaluadas.push({ grupo, codigo: 'f', mensaje: NO_EVALUADA });
+    } else if (salta) {
+      alarmas.push({
+        grupo,
+        codigo: 'f',
+        mensaje: `la ventaja de ${h.mejor} sobre el aleatorio (${puntosPorcentuales(h.diferencia.media)}) es menor que ${u.ventajaHabilidadMinimaPp} pp`,
+      });
+    }
+  }
+  return { alarmas, noEvaluadas };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Formato Markdown.
 
-function decimal(valor: number, decimales: number): string {
+export function decimal(valor: number, decimales: number): string {
   return valor.toFixed(decimales).replace('.', ',');
 }
-const porcentaje = (fraccion: number): string => `${decimal(100 * fraccion, 2)} %`;
-const puntosPorcentuales = (fraccion: number): string => `${decimal(100 * fraccion, 2)} pp`;
+export const porcentaje = (fraccion: number): string => `${decimal(100 * fraccion, 2)} %`;
+export const puntosPorcentuales = (fraccion: number): string => `${decimal(100 * fraccion, 2)} pp`;
 /** Centésimas a puntos, con 2 decimales. */
-const puntos = (centesimas: number): string => decimal(centesimas / 100, 2);
-const opcional = (valor: number | undefined, formato: (v: number) => string): string =>
+export const puntos = (centesimas: number): string => decimal(centesimas / 100, 2);
+export const opcional = (valor: number | undefined, formato: (v: number) => string): string =>
   valor === undefined ? '—' : formato(valor);
-const intervalo = (i: Intervalo, formato: (v: number) => string): string => `[${formato(i.inferior)}; ${formato(i.superior)}]`;
+export const intervalo = (i: Intervalo, formato: (v: number) => string): string => `[${formato(i.inferior)}; ${formato(i.superior)}]`;
 
-function tabla(cabecera: readonly string[], filas: readonly (readonly string[])[]): string[] {
+export function tabla(cabecera: readonly string[], filas: readonly (readonly string[])[]): string[] {
   return [`| ${cabecera.join(' | ')} |`, `| ${cabecera.map(() => '---').join(' | ')} |`, ...filas.map((f) => `| ${f.join(' | ')} |`)];
+}
+
+/** Pares de una diferencia emparejada; si los conjuntos de semillas difieren, indica que es la intersección. */
+export function pares(n: number, a: string, semillasA: number, b: string, semillasB: number): string {
+  return n === Math.max(semillasA, semillasB) ? String(n) : `${n} (intersección; ${a} ${semillasA}, ${b} ${semillasB})`;
+}
+
+/** Marca de la alarma (f) para una tabla: «salta», «no» o «no evaluada». */
+export function marcaHabilidad(h: Habilidad): string {
+  const salta = saltaHabilidad(h);
+  return salta === undefined ? 'no evaluada' : salta ? 'salta' : 'no';
 }
 
 /** Informe en Markdown, determinista: sin marcas de tiempo ni rutas absolutas. */
@@ -471,11 +597,35 @@ export function renderizar(a: Analisis): string {
         ['Configuración', 'Pares', 'Diferencia media', 'IC 95 %'],
         a.ventajas.map((v) => [
           v.etiquetaConfig,
-          v.diferencia.n === Math.max(v.semillasCargador, v.semillasBorde)
-            ? String(v.diferencia.n)
-            : `${v.diferencia.n} (intersección; cargador ${v.semillasCargador}, borde ${v.semillasBorde})`,
+          pares(v.diferencia.n, 'cargador', v.semillasCargador, 'borde', v.semillasBorde),
           puntosPorcentuales(v.diferencia.media),
           v.diferencia.intervalo === undefined ? '—' : intervalo(v.diferencia.intervalo, puntosPorcentuales),
+        ]),
+      ),
+      '',
+    );
+  }
+
+  l.push('## Ventaja de habilidad', '');
+  if (a.habilidades.length === 0) {
+    l.push('No hay ninguna configuración con el bot aleatorio y al menos uno de avaro o cargador.', '');
+  } else {
+    l.push(
+      'Diferencia de victorias del mejor de avaro y cargador (el de mayor tasa de victoria en la configuración) menos el aleatorio, emparejada por semilla, en puntos porcentuales, con su intervalo al 95 % por aproximación normal.',
+      '',
+    );
+    l.push(
+      ...tabla(
+        ['Configuración', 'Mejor', 'Victorias del mejor', 'Victorias del aleatorio', 'Pares', 'Diferencia media', 'IC 95 %', 'Alarma (f)'],
+        a.habilidades.map((h) => [
+          h.etiquetaConfig,
+          h.mejor,
+          porcentaje(h.victoriasMejor),
+          porcentaje(h.victoriasAleatorio),
+          pares(h.diferencia.n, h.mejor, h.semillasMejor, 'aleatorio', h.semillasAleatorio),
+          puntosPorcentuales(h.diferencia.media),
+          h.diferencia.intervalo === undefined ? '—' : intervalo(h.diferencia.intervalo, puntosPorcentuales),
+          marcaHabilidad(h),
         ]),
       ),
       '',
@@ -556,8 +706,8 @@ export function renderizar(a: Analisis): string {
   l.push('## Bonus', '', 'No disponible hasta H5.', '');
 
   l.push('## Alarmas', '');
-  if (a.alarmas.length === 0) l.push('Ninguna.');
-  else for (const al of a.alarmas) l.push(`- **${al.grupo}**: (${al.codigo}) ${al.mensaje}.`);
+  if (a.alarmas.length === 0 && a.noEvaluadas.length === 0) l.push('Ninguna.');
+  for (const al of [...a.alarmas, ...a.noEvaluadas]) l.push(`- **${al.grupo}**: (${al.codigo}) ${al.mensaje}.`);
   return `${l.join('\n')}\n`;
 }
 
