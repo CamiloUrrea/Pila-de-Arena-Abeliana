@@ -14,3 +14,4 @@
 
 # Contexto de diseño
 - La partida del MVP tiene un número fijo de rondas (valor provisional: 8; se fija en H6). El modo infinito, con escalada sin fin, queda fuera del MVP, pero la escalada (metas, recompensas) no debe suponer un final: el modo infinito debe ser después solo un cambio de configuración.
+- En `game`, la lógica de presentación va en funciones puras y probables en Node; PixiJS solo dibuja. El aspecto vive en `src/tema.ts`.
