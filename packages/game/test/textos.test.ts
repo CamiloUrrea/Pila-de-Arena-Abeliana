@@ -9,6 +9,7 @@ import {
   TEXTOS,
   describirDefinicion,
   describirError,
+  describirContadorRonda,
   describirFinDeRonda,
   describirGrano,
   describirMazo,
@@ -92,8 +93,9 @@ describe('describirGrano', () => {
     expect(TEXTOS.manoCompleta).toBe('Mano completa: confirma la tirada');
     expect(TEXTOS.confirmar).toBe('Confirmar');
     expect(TEXTOS.resolviendo).toBe('Resolviendo…');
-    expect(TEXTOS.recargar).toBe('Recarga la página para jugar otra ronda');
-    expect(TEXTOS.informacion(42, 3)).toBe('semilla 42 · lado 3');
+    expect(TEXTOS.otraRonda).toBe('Otra ronda (Enter)');
+    expect(TEXTOS.informacion(1, 42, 3)).toBe('Ronda 1 · semilla 42 · lado 3');
+    expect(TEXTOS.informacion(7, 4294967295, 9)).toBe('Ronda 7 · semilla 4294967295 · lado 9');
   });
 });
 
@@ -159,10 +161,26 @@ describe('describirFinDeRonda', () => {
     return r.valor.estado;
   };
 
-  it('ronda ganada y perdida, con los puntos finales en centésimas', () => {
-    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 523_450 })).toBe('Ronda ganada · 5234,5 puntos');
-    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 500_000 })).toBe('Ronda ganada · 5000 puntos');
-    expect(describirFinDeRonda({ ...estado(), fase: 'perdida', puntos: 4_007 })).toBe('Ronda perdida · 40,07 puntos');
+  it('ronda ganada: título, puntos sobre la meta, tiradas usadas y botón', () => {
+    expect(describirFinDeRonda({ ...estado(), fase: 'ganada', puntos: 523_450, tiradasRestantes: 2 })).toEqual({
+      titulo: 'RONDA GANADA',
+      puntos: '5234,5 / 50',
+      tiradas: 'Tiradas usadas: 3 de 5',
+      boton: 'Otra ronda (Enter)',
+    });
+  });
+
+  it('ronda perdida, con todas las tiradas usadas', () => {
+    expect(describirFinDeRonda({ ...estado(), fase: 'perdida', puntos: 4_007, tiradasRestantes: 0 })).toEqual({
+      titulo: 'RONDA PERDIDA',
+      puntos: '40,07 / 50',
+      tiradas: 'Tiradas usadas: 5 de 5',
+      boton: 'Otra ronda (Enter)',
+    });
+  });
+
+  it.each([1, 3, 12])('el contador de ronda %i', (n) => {
+    expect(describirContadorRonda(n)).toBe(`Ronda ${n}`);
   });
 
   it('con la ronda en juego no hay texto de fin', () => {

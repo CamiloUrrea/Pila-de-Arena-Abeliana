@@ -201,3 +201,27 @@ describe('contraste de los indicadores (WCAG)', () => {
     expect(contraste(mezcla, colores.fondo)).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('contraste del fin de ronda (WCAG)', () => {
+  const { velo, titulo, texto } = TEMA.finDeRonda;
+  const { activo } = TEMA.botonPrimario;
+  /** El velo es semitransparente: se mide contra su mezcla sobre el fondo y sobre cada color de celda (peor caso). */
+  const mezclar = (color: number, debajo: number, alfa: number): number =>
+    [16, 8, 0].reduce((acc, s) => acc | (Math.round(((color >> s) & 0xff) * alfa + ((debajo >> s) & 0xff) * (1 - alfa)) << s), 0);
+  const velos = [colores.fondo, ...colores.carga, colores.inestable].map((debajo) => mezclar(velo.color, debajo ?? 0, velo.opacidad));
+  const peor = (color: number): number => Math.min(...velos.map((v) => contraste(color, v)));
+
+  it('el título de ganada y el de perdida contra el velo (al menos 4,5)', () => {
+    expect(peor(titulo.ganada)).toBeGreaterThanOrEqual(4.5);
+    expect(peor(titulo.perdida)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('el texto del resultado contra el velo (al menos 4,5)', () => {
+    expect(peor(texto)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('el botón «Otra ronda» sobre el velo (al menos 3) y su texto sobre el botón (al menos 4,5)', () => {
+    expect(peor(activo.fondo)).toBeGreaterThanOrEqual(3);
+    expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);
+  });
+});

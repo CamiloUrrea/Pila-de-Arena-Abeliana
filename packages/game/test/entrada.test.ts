@@ -25,6 +25,10 @@ describe('accionDeTecla', () => {
     expect(tecla('-')).toEqual({ tipo: 'ritmo', direccion: -1 });
   });
 
+  it.each(['r', 'R'])('«%s» pide otra ronda', (t) => {
+    expect(tecla(t)).toEqual({ tipo: 'otraRonda' });
+  });
+
   it.each(['Enter', ' '])('«%s» acepta', (t) => {
     expect(tecla(t)).toEqual({ tipo: 'aceptar' });
   });
@@ -42,7 +46,7 @@ describe('accionDeTecla', () => {
     { ctrl: false, alt: false, meta: true },
     { ctrl: true, alt: true, meta: true },
   ])('con modificadores %o ninguna tecla hace nada', (mods) => {
-    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace', 'Enter', ' ', '+', '=', '-']) {
+    for (const t of ['1', '9', 'ArrowLeft', 'ArrowRight', 'z', 'Z', 'Backspace', 'Enter', ' ', '+', '=', '-', 'r', 'R']) {
       expect(accionDeTecla({ tecla: t, ...mods })).toBeNull();
     }
   });

@@ -11,8 +11,9 @@ export const TEXTOS = {
   confirmar: 'Confirmar',
   manoCompleta: 'Mano completa: confirma la tirada',
   resolviendo: 'Resolviendo…',
-  recargar: 'Recarga la página para jugar otra ronda',
-  informacion: (semilla: number, lado: number): string => `semilla ${semilla} · lado ${lado}`,
+  otraRonda: 'Otra ronda (Enter)',
+  informacion: (ronda: number, semilla: number, lado: number): string =>
+    `${describirContadorRonda(ronda)} · semilla ${semilla} · lado ${lado}`,
   /** Partes de la etiqueta de cadena «Oleada k · ×m · +P»; el multiplicador va aparte para resaltarlo. */
   oleada: (k: number): string => `Oleada ${k} · `,
   puntosDeTirada: (puntos: string): string => ` · +${puntos}`,
@@ -163,17 +164,31 @@ export function formatearPuntos(centesimas: number): string {
   return `${signo}${Math.floor(v / 100)}${decimales === '' ? '' : `,${decimales}`}`;
 }
 
-/** «Ronda ganada» o «Ronda perdida» con los puntos finales; `null` si la ronda sigue en juego. */
-export function describirFinDeRonda(estado: Estado): string | null {
-  const puntos = `${formatearPuntos(estado.puntos)} puntos`;
-  switch (estado.fase) {
-    case 'ganada':
-      return `Ronda ganada · ${puntos}`;
-    case 'perdida':
-      return `Ronda perdida · ${puntos}`;
-    case 'colocando':
-      return null;
-  }
+/** «Ronda 3»: el número de ronda de la sesión, desde 1. */
+export function describirContadorRonda(n: number): string {
+  return `Ronda ${n}`;
+}
+
+/** Textos del fin de ronda; `null` si la ronda sigue en juego. */
+export type TextosFinDeRonda = {
+  /** «RONDA GANADA» o «RONDA PERDIDA». */
+  readonly titulo: string;
+  /** «P / M» con `formatearPuntos`. */
+  readonly puntos: string;
+  /** «Tiradas usadas: k de N». */
+  readonly tiradas: string;
+  readonly boton: string;
+};
+
+export function describirFinDeRonda(estado: Estado): TextosFinDeRonda | null {
+  if (estado.fase === 'colocando') return null;
+  const { meta, tiradas } = estado.config;
+  return {
+    titulo: estado.fase === 'ganada' ? 'RONDA GANADA' : 'RONDA PERDIDA',
+    puntos: `${formatearPuntos(estado.puntos)} / ${formatearPuntos(meta)}`,
+    tiradas: `Tiradas usadas: ${tiradas - estado.tiradasRestantes} de ${tiradas}`,
+    boton: TEXTOS.otraRonda,
+  };
 }
 
 /**

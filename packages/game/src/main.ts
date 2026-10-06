@@ -1,14 +1,10 @@
-// Punto de entrada del cliente: lee la URL, crea la ronda con el núcleo y la muestra, lista para colocar granos.
-import { CONFIG_INICIAL, crearRonda } from '@pila/core';
-import { leerParametros } from './parametros.ts';
+// Punto de entrada del cliente: lee la URL, crea la ronda con el núcleo y la muestra, lista para colocar granos; al
+// pedir otra ronda, crea una nueva con semilla nueva sin recargar la página.
+import { leerParametros, semillaAleatoria, urlConSemilla } from './parametros.ts';
 import { crearEscena } from './render.ts';
+import { nuevaRonda } from './rondas.ts';
 import { TEMA } from './tema.ts';
 import { TEXTOS } from './textos.ts';
-
-/** Semilla aleatoria para cuando la URL no trae una: 32 bits del generador criptográfico del navegador. */
-function semillaAleatoria(): number {
-  return crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
-}
 
 /** Muestra un error legible en lugar del juego. */
 function mostrarError(titulo: string, lineas: readonly string[]): void {
@@ -45,14 +41,32 @@ async function arrancar(): Promise<void> {
     return;
   }
   const { semilla, lado, ritmo } = parametros.valor;
-  const ronda = crearRonda({ ...CONFIG_INICIAL, lado }, semilla);
-  if (!ronda.ok) {
-    mostrarError(TEXTOS.errorInicio, [TEXTOS.configuracionInvalida(ronda.error.campo, ronda.error.motivo)]);
+  const primera = nuevaRonda({ lado, semilla });
+  if (!primera.ok) {
+    mostrarError(TEXTOS.errorInicio, [TEXTOS.configuracionInvalida(primera.error.campo, primera.error.motivo)]);
     return;
   }
+
+  // El contador de ronda vive mientras la página siga abierta (todavía sin almacenamiento).
+  let numero = 1;
   const contenedor = document.getElementById('juego') ?? document.body;
-  const escena = await crearEscena(contenedor, semilla, ritmo);
-  escena.mostrarEstado(ronda.valor.estado);
+  const escena = await crearEscena(contenedor, {
+    ritmo,
+    // Otra ronda: semilla nueva, mismo lado; el ritmo lo conserva la escena. La URL se actualiza sin recargar.
+    alPedirOtraRonda: () => {
+      const nueva = semillaAleatoria();
+      const ronda = nuevaRonda({ lado, semilla: nueva });
+      if (!ronda.ok) {
+        escena.mostrarMensaje(TEXTOS.configuracionInvalida(ronda.error.campo, ronda.error.motivo));
+        return;
+      }
+      numero++;
+      const { pathname, search, hash } = window.location;
+      window.history.replaceState(null, '', `${pathname}${urlConSemilla(search, nueva)}${hash}`);
+      escena.mostrarRonda({ ui: ronda.valor, semilla: nueva, numero });
+    },
+  });
+  escena.mostrarRonda({ ui: primera.valor, semilla, numero });
 }
 
 void arrancar();

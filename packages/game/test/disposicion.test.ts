@@ -3,9 +3,11 @@ import fc from 'fast-check';
 import {
   botonConfirmarEn,
   botonDeshacerEn,
+  botonOtraRondaEn,
   celdaEn,
   disponer,
   disponerFichasTiradas,
+  disponerFinDeRonda,
   disponerIndicadores,
   disponerMano,
   disponerMazo,
@@ -423,5 +425,63 @@ describe('disposición de los indicadores y del mazo', () => {
       }
       expect(disponerFichasTiradas(area, 0)).toEqual([]);
     }
+  });
+});
+
+function comprobarFin(ancho: number, alto: number): void {
+  const d = disponerFinDeRonda({ ancho, alto });
+  const ventana = { x: 0, y: 0, ancho, alto };
+  const piezas = [d.titulo, ...d.lineas, d.boton];
+  expect(d.lineas).toHaveLength(2);
+  expect(d.velo).toEqual(disponer(ancho, alto, 1).bandaCentral);
+  for (const r of [d.velo, ...piezas]) {
+    expect(finito(r)).toBe(true);
+    expect(r.ancho).toBeGreaterThan(0);
+    expect(r.alto).toBeGreaterThan(0);
+    expect(dentroDe(r, ventana)).toBe(true);
+  }
+  for (const r of piezas) expect(dentroDe(r, d.velo)).toBe(true);
+  for (const [i, a] of piezas.entries()) for (const b of piezas.slice(i + 1)) expect(solapan(a, b)).toBe(false);
+}
+
+describe('disposición del fin de ronda', () => {
+  for (const [ancho, alto] of VENTANAS) {
+    it(`ventana ${ancho}×${alto}: velo, título, líneas y botón dentro y sin solaparse`, () => comprobarFin(ancho, alto));
+  }
+
+  it('propiedad: con ventanas de 100 a 4000 en cada eje', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 100, max: 4000 }), fc.integer({ min: 100, max: 4000 }), (a, h) => comprobarFin(a, h)),
+    );
+  });
+
+  it.each<[number, number]>([
+    [0, 0],
+    [0, 800],
+    [800, 0],
+    [-5, 300],
+    [Number.NaN, 300],
+  ])('ventana degenerada %d×%d: sin NaN ni excepciones', (ancho, alto) => {
+    expect(JSON.stringify(disponerFinDeRonda({ ancho, alto }))).not.toContain('null');
+  });
+
+  it('botonOtraRondaEn acierta dentro y falla fuera, también en el título', () => {
+    const d = disponerFinDeRonda({ ancho: 800, alto: 600 });
+    const b = d.boton;
+    expect(botonOtraRondaEn({ x: b.x + b.ancho / 2, y: b.y + b.alto / 2 }, d)).toBe(true);
+    expect(botonOtraRondaEn({ x: b.x, y: b.y }, d)).toBe(true);
+    expect(botonOtraRondaEn({ x: b.x - 1, y: b.y + 1 }, d)).toBe(false);
+    expect(botonOtraRondaEn({ x: b.x + b.ancho, y: b.y + 1 }, d)).toBe(false);
+    expect(botonOtraRondaEn({ x: b.x + 1, y: b.y - 1 }, d)).toBe(false);
+    expect(botonOtraRondaEn({ x: b.x + 1, y: b.y + b.alto }, d)).toBe(false);
+    expect(botonOtraRondaEn({ x: d.titulo.x + d.titulo.ancho / 2, y: d.titulo.y + d.titulo.alto / 2 }, d)).toBe(false);
+  });
+
+  it('con una ventana asimétrica distingue x de y', () => {
+    const d = disponerFinDeRonda({ ancho: 2400, alto: 700 });
+    const b = d.boton;
+    const centro = { x: b.x + b.ancho / 2, y: b.y + b.alto / 2 };
+    expect(botonOtraRondaEn(centro, d)).toBe(true);
+    expect(botonOtraRondaEn({ x: centro.y, y: centro.x }, d)).toBe(false);
   });
 });

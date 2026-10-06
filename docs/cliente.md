@@ -1,6 +1,6 @@
 # Cliente web (`@pila/game`)
 
-El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, los indicadores (semilla y lado, etiqueta de cadena, ritmo, medidor de desborde y tiradas); en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano y los recuentos del mazo. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Los indicadores de la ronda llegan en T3.4. Todavía no hay reinicio de ronda (T3.5) ni sonido.
+El cliente dibuja con PixiJS una ronda real creada con `@pila/core`: arriba, los indicadores (semilla y lado, etiqueta de cadena, ritmo, medidor de desborde y tiradas); en el centro, la rejilla con los granos de cada celda dibujados como puntos; abajo, la mano y los recuentos del mazo. El jugador elige qué grano de la mano coloca, lo coloca sobre una celda, puede deshacer y ve una vista previa de lo que sumarán los granos, también al pasar el ratón por una celda. Al confirmar la tirada, la cascada se anima oleada a oleada a partir de los eventos del núcleo (T3.3a), con puntos flotantes, una etiqueta de cadena, ritmo ajustable y aceleración progresiva (T3.3b). Los indicadores de la ronda llegan en T3.4. Al terminar una ronda se puede jugar otra sin recargar la página (T3.5a). Todavía no hay estadísticas de sesión ni almacenamiento (T3.5b) ni sonido.
 
 ## Arrancarlo
 
@@ -11,6 +11,8 @@ pnpm --filter @pila/game preview   # sirve la compilación
 ```
 
 `pnpm check`, en la raíz, incluye la compilación del cliente después de los tipos, el linter y las pruebas.
+
+La compilación usa una base relativa (`base: './'` en `vite.config.ts`): `dist/index.html` enlaza sus archivos como `./assets/…`, así que funciona servida desde cualquier carpeta o subruta (por ejemplo en itch.io). Una prueba lee la configuración exportada y comprueba esa base.
 
 ## Parámetros de la URL
 
@@ -35,6 +37,7 @@ Por ejemplo, `http://localhost:5173/?semilla=2026&lado=4&ritmo=0.5`. Un parámet
 | `Z` o `Retroceso` | Lo mismo que «Deshacer». |
 | Clic o toque en «Confirmar», o `Intro` o `Espacio` | Confirma la tirada, si la mano está completa. Si no, un mensaje pide colocar todos los granos. |
 | Durante la cascada: cualquier clic o toque, `Intro` o `Espacio` | Salta al final de la animación. Lo demás no hace nada, salvo el ritmo. |
+| Con la ronda terminada: clic o toque en «Otra ronda», `Intro`, `Espacio`, `r` o `R` | Empieza una ronda nueva. |
 | `+` (o `=`) o `-` | Sube o baja el ritmo de la animación al siguiente valor permitido. `=` es un alias de `+`, porque en muchos teclados es la misma tecla sin Mayúsculas. Funciona en cualquier momento, también durante la cascada. |
 | Pasar el ratón por una celda | Vista previa de la colocación candidata (ver más abajo). |
 
@@ -67,7 +70,26 @@ El cursor es una mano sobre las celdas cuando hay un grano seleccionado, sobre l
 
 **Aceleración progresiva.** Las cascadas largas van acelerando: la alerta y el derrumbe de la oleada `k` duran la base por `max(0,4; 0,9^(k − 1))`. La oleada 1 va a la duración base, cada oleada dura un 10 % menos que la anterior y desde la décima ninguna baja del 40 %. La adición no se acelera. El ritmo se aplica además, sobre estas duraciones.
 
-**Final de ronda (provisional).** Si la tirada gana o pierde la ronda, al terminar la cascada un velo sobre el tablero muestra «Ronda ganada» o «Ronda perdida» con los puntos finales y la nota «Recarga la página para jugar otra ronda». No hay más interacción hasta recargar; el reinicio llega en T3.5.
+**Fin de ronda y otra ronda.** Cuando acaba la cascada de la tirada que gana o pierde la ronda, un velo sobre el tablero muestra el título («RONDA GANADA» en amarillo o «RONDA PERDIDA» en rosa), los puntos sobre la meta («P / M»), las tiradas usadas («Tiradas usadas: k de N») y el botón primario «Otra ronda (Enter)». El botón, `Intro`, `Espacio`, `r` y `R` empiezan una ronda nueva sin recargar la página:
+
+- con una semilla nueva (`semillaAleatoria`, de `crypto.getRandomValues`), el mismo lado y el mismo ritmo;
+- el contador de ronda sube (empieza en 1) y se ve en la banda superior: «Ronda N · semilla S · lado L». Dura mientras la página siga abierta; todavía no se guarda;
+- el medidor vuelve a 0 sin animación, y se borra cualquier cascada o mensaje pendiente;
+- la URL se actualiza con `history.replaceState` y `urlConSemilla`, sin recargar: la semilla nueva sustituye a la anterior y se conservan el lado, el ritmo y los parámetros desconocidos, en su orden. Recargar la página repite la ronda en curso;
+- si la ronda no se pudiera crear, se muestra el error de configuración en la línea de información.
+
+`main.ts` crea las rondas con `nuevaRonda({ lado, semilla })` (de `rondas.ts`), que devuelve el estado de interfaz inicial o el error de configuración sin lanzar, también con una semilla inválida.
+
+**Fases del flujo.** `flujo.ts` es la única fuente de verdad de qué entrada se acepta. `faseDeFlujo({ animando, estado })` da `animando` si hay una cascada en curso; si no, `fin` cuando la ronda ya no está en `colocando`, y `jugando` en otro caso. El render traduce cada tecla y cada clic a una acción y la pasa por `permitida(fase, accion)`:
+
+| Acción | `jugando` | `animando` | `fin` |
+| --- | --- | --- | --- |
+| Seleccionar, ciclar, colocar, deshacer, confirmar | Sí | No | No |
+| Saltar la animación | No | Sí | No |
+| Otra ronda | No | No | Sí |
+| Ritmo | Sí | Sí | Sí |
+
+`interpretarAceptar(fase)` decide qué significan `Intro` y `Espacio`: confirmar en `jugando`, saltar en `animando` y otra ronda en `fin`. Un clic durante la cascada es «saltar» esté donde esté; con la ronda terminada, solo responde el botón «Otra ronda».
 
 **Banda inferior.** Las fichas de la mano van en una fila centrada, en el orden de la mano: el normal es un círculo casi blanco, el pesado un círculo mayor violeta con dos puntos y el explosivo una estrella roja. Una ficha ya colocada se atenúa y la seleccionada lleva un anillo. Debajo, la línea de información describe el grano seleccionado («Explosivo: +1 en la celda y +1 en cada vecina»), dice «Mano completa» o muestra el mensaje de la última acción imposible. A la derecha, el botón primario «Confirmar» y, debajo, «Deshacer»; cada uno se ve apagado cuando no se puede usar.
 
@@ -77,13 +99,15 @@ La lógica de presentación son funciones puras, sin PixiJS ni DOM, que se prueb
 
 | Módulo | Qué hace | ¿Puro? |
 | --- | --- | --- |
-| `src/parametros.ts` | `leerParametros(busqueda, generarSemilla)`: parsea la URL (semilla, lado y ritmo) y devuelve los parámetros o una lista de errores tipados con su mensaje. La semilla por defecto la da la función inyectada. | Sí |
+| `src/parametros.ts` | `leerParametros(busqueda, generarSemilla)`: parsea la URL (semilla, lado y ritmo) y devuelve los parámetros o una lista de errores tipados con su mensaje. `urlConSemilla(busqueda, semilla)`: la consulta con la semilla nueva. `semillaAleatoria()`: la semilla del navegador, que se inyecta. La semilla por defecto la da la función inyectada. | Sí |
 | `src/tema.ts` | Datos del aspecto: colores, bandas, proporciones, tipografía, fichas, vista previa y botón. | Sí (solo datos) |
 | `src/textos.ts` | `TEXTOS`, los textos de la interfaz; `describirGrano(tipo)`, la descripción de un grano generada de `DEFINICIONES_GRANOS`; y `describirError(error)`, el mensaje de cada error del controlador y del núcleo. | Sí |
 | `src/entrada.ts` | `accionDeTecla({ tecla, ctrl, alt, meta })`: qué gesto dispara una tecla, o `null`. | Sí |
 | `src/controlador.ts` | `iniciarControlador`, `seleccionar`, `ciclar`, `colocar`, `deshacer`, `deshacerDesdeFicha` y `confirmar` sobre un estado de interfaz `{ estado, seleccionado }`. | Sí |
 | `src/cascada.ts` | `construirCascada(celdasAntes, eventos, lado, umbral, multiplicadorPorOleada)`: los pasos de la animación de una tirada. `muestrear(cascada, tMs)`: el cuadro de un instante. `factorAceleracion`, `valorGranoFuera` y `escalaPopup`: las fórmulas de la aceleración, del valor de un grano y de la escala de los puntos flotantes. | Sí |
 | `src/ritmo.ts` | `RITMOS`, los ritmos permitidos; `siguienteRitmo(actual, direccion)` y `formatearRitmo(ritmo)`. | Sí |
+| `src/flujo.ts` | `faseDeFlujo`, `permitida` e `interpretarAceptar`: las fases del flujo y qué entrada acepta cada una. | Sí |
+| `src/rondas.ts` | `nuevaRonda({ lado, semilla })`: una ronda nueva con su estado de interfaz inicial, o el error. | Sí |
 | `src/indicadores.ts` | `proporcionMedidor`, `colorMedidor`, `puntosMostrados`, `describirIndicadores`, `fichasTiradas`, `suavizar` e `intensidadPulso`. | Sí |
 | `src/reproductor.ts` | `crearReproductor`, `avanzar`, `saltar`, `cuadroActual` y `terminado`: el tiempo de una cascada, inmutable. | Sí |
 | `src/previsualizacion.ts` | `calcularPrevistas(estado)`: la rejilla proyectada y los granos previstos por celda. `calcularPrevistasConCandidata(estado, indice, celda)`: lo mismo con una colocación hipotética más, y aparte lo que añade solo ella. | Sí |
@@ -129,7 +153,7 @@ Mientras se anima, las celdas se dibujan con el color de su carga (aunque tengan
 
 En la banda inferior, los botones van a la derecha, apilados en el alto de la fila de fichas: Confirmar arriba y Deshacer abajo, con el mismo ancho, limitado por el de la banda y por su alto. La fila de fichas se centra en la banda y deja a la izquierda el mismo espacio libre que ocupan los botones a la derecha, para quedar centrada sin tocarlos. El radio de las fichas es el mayor que cabe con cualquier número de fichas (de 1 a 12) y cualquier ventana; la descripción va debajo. `celdaEn`, `botonConfirmarEn` y `botonDeshacerEn` usan los mismos rectángulos que se dibujan: los huecos entre celdas y lo que queda fuera del tablero no son ninguna celda. `disponerMazo(ventana)` da el texto del mazo en el hueco libre de la izquierda de la fila de fichas, del mismo ancho que los botones, así que no pisa las fichas, los botones ni la línea de información.
 
-La banda superior (`disponerIndicadores(ventana)`) tiene dos filas, con los anchos como fracciones de la banda para que todo quepa sin solaparse con cualquier ventana. Arriba: la semilla y el lado (27 %), la etiqueta de cadena (57 %) y el ritmo (16 %). Abajo: la barra del medidor (56 %), su texto «P / M» (22 %) y las fichas de tiradas (22 %, colocadas con `disponerFichasTiradas`).
+La banda superior (`disponerIndicadores(ventana)`) tiene dos filas, con los anchos como fracciones de la banda para que todo quepa sin solaparse con cualquier ventana. Arriba: la ronda, la semilla y el lado (27 %), la etiqueta de cadena (57 %) y el ritmo (16 %). Abajo: la barra del medidor (56 %), su texto «P / M» (22 %) y las fichas de tiradas (22 %, colocadas con `disponerFichasTiradas`).
 
 **Celdas.** Cada celda es un rectángulo redondeado con un color según su carga (0 a 3; una carga mayor pero estable usa el de 3). Una celda con `umbral` granos o más se marca como inestable y usa su propio color. Fuera de una animación no debería verse ninguna, porque el núcleo siempre deja la rejilla estable.
 
@@ -186,7 +210,7 @@ Todo el aspecto vive en `src/tema.ts`, en el objeto `TEMA`:
 - **`animacion.popups`:** relleno amarillo `#FFE600` y contorno oscuro `#0A0420` de los puntos flotantes, tamaño del texto relativo a la celda (0,3), distancia al borde (0,3 celdas), ascenso (0,5 celdas), tramo final en que se desvanecen (0,4) y crecimiento por oleada (0,15) con su tope (2).
 - **`bandaSuperior`:** tamaño y colores de la etiqueta de cadena (`#F5F0FF`, con el multiplicador en `#FFE600`) y tamaño y color del texto de ritmo (`#B8AEE0`), relativos al alto de su rectángulo.
 - **`indicadores`:** margen de la banda superior; el medidor (barra `#22144D`, relleno por tramos `#00E5FF`, `#FFE600` y `#FF2E93`, texto `#F5F0FF` y constante del suavizado, 180 ms); las fichas de tiradas (llenas `#F5F0FF`, vacías con contorno `#6F6596`); el texto del mazo (`#B8AEE0`); y el contorno de celda cargada (`#F5F0FF`, la mitad del hueco entre celdas, opacidad de 0,5 a 1 con un período de 1200 ms).
-- **`finDeRonda`:** tamaño del texto central del final de ronda y opacidad del velo.
+- **`finDeRonda`:** el velo (`#0A0420` con opacidad 0,92), el color del título (ganada `#FFE600`, perdida `#FF2E93`) y el del texto del resultado (`#F5F0FF`). El botón «Otra ronda» usa `botonPrimario`. Su disposición la da `disponerFinDeRonda(ventana)`: el velo cubre la banda central y, dentro, una columna centrada con el título, las dos líneas y el botón, escalada con el menor de los lados.
 
 Los ritmos permitidos están en `RITMOS`, en `src/ritmo.ts`.
 - **`bandas`:** el reparto vertical. `BANDAS_INICIALES` reserva el 12 % para los indicadores, el 63 % para el tablero y el 25 % para la mano.
@@ -212,7 +236,8 @@ Los colores son provisionales: el arte definitivo sustituirá el tema sin tocar 
 - el relleno de los puntos flotantes contra el fondo: al menos 4,5; con su contorno, contra cada color de celda: en el peor caso, 3;
 - la etiqueta de cadena (y su multiplicador resaltado) contra el fondo: al menos 7; el texto de ritmo: al menos 4,5;
 - cada relleno del medidor contra la barra: al menos 3; la barra contra el fondo: al menos 1,2; los textos del medidor y del mazo contra el fondo: al menos 4,5; las fichas de tiradas contra el fondo: al menos 3;
-- el contorno de celda cargada contra la celda de carga 3 y contra el fondo: al menos 3; y, en el punto más tenue del pulso, mezclado sobre el fondo donde se dibuja, también 3.
+- el contorno de celda cargada contra la celda de carga 3 y contra el fondo: al menos 3; y, en el punto más tenue del pulso, mezclado sobre el fondo donde se dibuja, también 3;
+- en el fin de ronda, contra el velo mezclado sobre el fondo y sobre cada color de celda (peor caso): los títulos de ganada y perdida y el texto del resultado, al menos 4,5; el botón «Otra ronda», al menos 3, y su texto sobre el botón, al menos 4,5.
 
 ## Reglas de importación
 

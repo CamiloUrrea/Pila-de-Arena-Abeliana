@@ -11,23 +11,34 @@ import {
   confirmar,
   deshacer,
   deshacerDesdeFicha,
-  iniciarControlador,
   seleccionar,
 } from './controlador.ts';
 import type { ErrorControlador, EstadoInterfaz, PasoInterfaz } from './controlador.ts';
 import {
   botonConfirmarEn,
   botonDeshacerEn,
+  botonOtraRondaEn,
   celdaEn,
   disponer,
   disponerFichasTiradas,
+  disponerFinDeRonda,
   disponerIndicadores,
   disponerMano,
   disponerMazo,
   fichaEn,
 } from './disposicion.ts';
-import type { Disposicion, DisposicionIndicadores, DisposicionMano, Punto, Rect } from './disposicion.ts';
+import type {
+  Disposicion,
+  DisposicionFinDeRonda,
+  DisposicionIndicadores,
+  DisposicionMano,
+  Punto,
+  Rect,
+} from './disposicion.ts';
 import { accionDeTecla } from './entrada.ts';
+import type { AccionTecla } from './entrada.ts';
+import { faseDeFlujo, interpretarAceptar, permitida } from './flujo.ts';
+import type { AccionFlujo, FaseFlujo } from './flujo.ts';
 import {
   colorMedidor,
   describirIndicadores,
@@ -45,20 +56,32 @@ import type { Reproductor } from './reproductor.ts';
 import { RITMO_POR_DEFECTO, formatearRitmo, siguienteRitmo } from './ritmo.ts';
 import { TEMA } from './tema.ts';
 import type { AspectoBoton } from './tema.ts';
+import type { TextosFinDeRonda } from './textos.ts';
 import { TEXTOS, describirError, describirFinDeRonda, describirGrano, formatearPuntos, lineasMazo } from './textos.ts';
 import { PATRONES_GRANOS, describirCeldas } from './vista.ts';
 import type { CeldaDescrita } from './vista.ts';
 
+/** Una ronda para mostrar: su estado de interfaz inicial, su semilla y su número en la sesión (desde 1). */
+export type Ronda = { readonly ui: EstadoInterfaz; readonly semilla: number; readonly numero: number };
+
 export type Escena = {
-  /** Muestra un estado nuevo y selecciona su primer grano sin colocar. */
-  readonly mostrarEstado: (estado: Estado) => void;
+  /** Empieza a mostrar una ronda: borra cualquier cascada o mensaje pendiente y pone el medidor sin animación. */
+  readonly mostrarRonda: (ronda: Ronda) => void;
+  /** Muestra un mensaje de error en la línea de información. */
+  readonly mostrarMensaje: (texto: string) => void;
+};
+
+export type OpcionesEscena = {
+  /** Ritmo inicial de la animación; las teclas `+` y `-` lo cambian. */
+  readonly ritmo?: number;
+  /** Se llama cuando el jugador pide otra ronda en la fase de fin; quien crea la escena crea la ronda. */
+  readonly alPedirOtraRonda: () => void;
 };
 
 /** Cascada en curso: el reproductor y el estado de interfaz que se muestra al terminar. */
 type Animacion = { readonly rep: Reproductor; readonly final: EstadoInterfaz };
 
 const manoCompleta = (estado: Estado): boolean => estado.mano.length > 0 && estado.mano.every((g) => g.celda !== null);
-const enJuego = (estado: Estado): boolean => estado.fase === 'colocando';
 
 /**
  * Máximo de puntos flotantes a la vez: los granos que salen en una oleada, como mucho uno por cada lado exterior
@@ -68,10 +91,9 @@ const MAXIMO_POPUPS = 4 * LADO_MAXIMO;
 
 /**
  * Crea la aplicación de PixiJS dentro de `contenedor`, ajustada a la ventana y a la densidad de píxeles, y atiende
- * los gestos del jugador. `semilla` solo se muestra en la banda superior: el estado no la guarda. `ritmo` es el
- * inicial de la animación; las teclas `+` y `-` lo cambian.
+ * los gestos del jugador. Qué entrada se acepta lo decide solo la fase del flujo (`faseDeFlujo` y `permitida`).
  */
-export async function crearEscena(contenedor: HTMLElement, semilla: number, ritmoInicial = RITMO_POR_DEFECTO): Promise<Escena> {
+export async function crearEscena(contenedor: HTMLElement, opciones: OpcionesEscena): Promise<Escena> {
   const app = new Application();
   await app.init({
     background: TEMA.colores.fondo,
@@ -105,7 +127,11 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   let mensaje: string | null = null;
   /** Cascada que se está reproduciendo; mientras exista, la interacción está bloqueada. */
   let animacion: Animacion | null = null;
-  let ritmo = ritmoInicial;
+  let ritmo = opciones.ritmo ?? RITMO_POR_DEFECTO;
+  /** Semilla y número de la ronda en curso, para la banda superior (el estado no guarda la semilla). */
+  let semilla = 0;
+  let numeroRonda = 1;
+  let fin: DisposicionFinDeRonda | undefined;
   /** Puntos que muestra el relleno del medidor, suavizados hacia `puntosMostrados`. */
   let medidor = 0;
   /** Tiempo de reloj acumulado por el ticker, para el pulso de las celdas cargadas. */
@@ -115,6 +141,10 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   const vaciar = (capa: Container): void => {
     for (const hijo of capa.removeChildren()) hijo.destroy({ children: true });
   };
+
+  /** La fase del flujo: la única fuente de verdad de qué entrada se acepta. */
+  const fase = (): FaseFlujo | undefined =>
+    ui === undefined ? undefined : faseDeFlujo({ animando: animacion !== null, estado: ui.estado });
 
   /** Puntos que debe mostrar el medidor: durante una cascada suben al terminar cada oleada. */
   const objetivoMedidor = (): number => {
@@ -139,7 +169,7 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
     const info = indicadoresActuales();
     if (ui === undefined || tablero === undefined || indicadores === undefined || info === undefined) return;
     const cuadro = animacion === null ? null : cuadroActual(animacion.rep);
-    bandaSuperior.actualizar(indicadores, semilla, ui.estado.config.lado, ritmo, cuadro, info, medidor);
+    bandaSuperior.actualizar(indicadores, numeroRonda, semilla, ui.estado.config.lado, ritmo, cuadro, info, medidor);
     if (cuadro === null) {
       mostrarPopups([], tablero);
       return;
@@ -159,6 +189,8 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
     tablero = disponer(ventana.ancho, ventana.alto, estado.config.lado);
     mano = disponerMano(ventana, estado.mano.length);
     indicadores = disponerIndicadores(ventana);
+    fin = disponerFinDeRonda(ventana);
+    const jugando = fase() === 'jugando';
     vaciar(capaCargadas);
     capaMano.addChild(dibujarMazo(disponerMazo(ventana), describirIndicadores(estado).mazo));
 
@@ -171,22 +203,22 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
       return;
     }
 
-    capaTablero.addChild(dibujarTablero(tablero, ui, enJuego(estado) ? celdaRaton : null));
+    capaTablero.addChild(dibujarTablero(tablero, ui, jugando ? celdaRaton : null));
     // Las celdas a un grano de caer, solo mientras se coloca: su contorno pulsa con el ticker.
-    if (enJuego(estado)) capaCargadas.addChild(dibujarCargadas(tablero, describirCeldas(estado.celdas, estado.config.umbral)));
+    if (jugando) capaCargadas.addChild(dibujarCargadas(tablero, describirCeldas(estado.celdas, estado.config.umbral)));
     const seleccionado = ui.seleccionado === null ? undefined : estado.mano[ui.seleccionado];
     const linea = mensaje ?? (seleccionado === undefined ? TEXTOS.manoCompleta : describirGrano(seleccionado.tipo));
     capaMano.addChild(
       dibujarMano(mano, ui, {
         linea,
         error: mensaje !== null,
-        bloqueada: !enJuego(estado),
+        bloqueada: !jugando,
         confirmar: manoCompleta(estado),
         deshacer: estado.ordenColocacion.length > 0,
       }),
     );
-    const fin = describirFinDeRonda(estado);
-    if (fin !== null) capaFin.addChild(dibujarFinDeRonda(tablero.tablero, fin));
+    const resultado = describirFinDeRonda(estado);
+    if (resultado !== null) capaFin.addChild(dibujarFinDeRonda(fin, resultado, estado.fase === 'ganada'));
     dibujarCuadroActual();
   };
 
@@ -255,36 +287,58 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
     dibujarCuadroActual();
   });
 
+  /** Ejecuta una acción de entrada si la fase la permite; si no, no hace nada. */
+  const intentar = (accion: AccionFlujo, ejecutarAccion: (actual: EstadoInterfaz) => void): void => {
+    const f = fase();
+    if (ui === undefined || f === undefined || !permitida(f, accion)) return;
+    ejecutarAccion(ui);
+  };
+
+  /** Acción de flujo de un clic o toque en `p`, con lo que hay que hacer; `null` si no cae sobre nada. */
+  const accionEnPunto = (p: Punto): [AccionFlujo, (actual: EstadoInterfaz) => void] | null => {
+    const f = fase();
+    if (ui === undefined || f === undefined) return null;
+    // Mientras se anima, cualquier clic o toque salta al final.
+    if (f === 'animando') return ['saltar', saltarAnimacion];
+    if (f === 'fin') return fin !== undefined && botonOtraRondaEn(p, fin) ? ['otraRonda', opciones.alPedirOtraRonda] : null;
+    const celda = tablero === undefined ? null : celdaEn(p, tablero);
+    if (celda !== null) return ['colocar', (u) => ejecutar(colocar(u, celda.x, celda.y))];
+    const ficha = mano === undefined ? null : fichaEn(p, mano);
+    if (ficha !== null) {
+      // Una ficha sin colocar se elige; una colocada se deshace si es la última (si no, el error explica por qué).
+      if (ui.estado.mano[ficha]?.celda === null) return ['seleccionar', (u) => ejecutar(seleccionar(u, ficha))];
+      return ['deshacer', (u) => ejecutar(deshacerDesdeFicha(u, ficha))];
+    }
+    if (mano !== undefined && botonConfirmarEn(p, mano)) return ['confirmar', intentarConfirmar];
+    if (mano !== undefined && botonDeshacerEn(p, mano)) return ['deshacer', (u) => ejecutar(deshacer(u))];
+    return null;
+  };
+
   /** Si el punto cae sobre algo que responde a un clic, para el cursor de mano. */
   const accionable = (p: Punto): boolean => {
-    if (ui === undefined || animacion !== null || !enJuego(ui.estado)) return false;
+    const f = fase();
+    if (ui === undefined || f === undefined || f === 'animando') return false;
+    const accion = accionEnPunto(p);
+    if (accion === null || !permitida(f, accion[0])) return false;
     const { estado, seleccionado } = ui;
-    if (tablero !== undefined && seleccionado !== null && celdaEn(p, tablero) !== null) return true;
-    if (mano === undefined) return false;
-    const ficha = fichaEn(p, mano);
-    if (ficha !== null) return estado.mano[ficha]?.celda === null || estado.ordenColocacion.at(-1) === ficha;
-    if (manoCompleta(estado) && botonConfirmarEn(p, mano)) return true;
-    return estado.ordenColocacion.length > 0 && botonDeshacerEn(p, mano);
+    switch (accion[0]) {
+      case 'colocar':
+        return seleccionado !== null;
+      case 'deshacer': {
+        // En una ficha colocada, solo si es la última; en el botón, si hay algo que deshacer.
+        const ficha = mano === undefined ? null : fichaEn(p, mano);
+        return ficha === null ? estado.ordenColocacion.length > 0 : estado.ordenColocacion.at(-1) === ficha;
+      }
+      case 'confirmar':
+        return manoCompleta(estado);
+      default:
+        return true;
+    }
   };
 
   app.stage.on('pointertap', (e: FederatedPointerEvent) => {
-    if (ui === undefined) return;
-    // Mientras se anima, cualquier clic o toque salta al final; con la ronda terminada no hay interacción.
-    if (animacion !== null) return saltarAnimacion();
-    if (!enJuego(ui.estado)) return;
-    const p = { x: e.global.x, y: e.global.y };
-    const celda = tablero === undefined ? null : celdaEn(p, tablero);
-    const ficha = mano === undefined ? null : fichaEn(p, mano);
-    if (celda !== null) {
-      ejecutar(colocar(ui, celda.x, celda.y));
-    } else if (ficha !== null) {
-      // Una ficha sin colocar se elige; una colocada se deshace si es la última (si no, el error explica por qué).
-      ejecutar(ui.estado.mano[ficha]?.celda === null ? seleccionar(ui, ficha) : deshacerDesdeFicha(ui, ficha));
-    } else if (mano !== undefined && botonConfirmarEn(p, mano)) {
-      intentarConfirmar(ui);
-    } else if (mano !== undefined && botonDeshacerEn(p, mano)) {
-      ejecutar(deshacer(ui));
-    }
+    const accion = accionEnPunto({ x: e.global.x, y: e.global.y });
+    if (accion !== null) intentar(...accion);
   });
 
   const moverRaton = (celda: Punto | null): void => {
@@ -295,48 +349,64 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number, ritm
   app.stage.on('pointermove', (e: FederatedPointerEvent) => {
     const p = { x: e.global.x, y: e.global.y };
     app.canvas.style.cursor = accionable(p) ? 'pointer' : 'default';
-    // Solo el ratón tiene vista previa al pasar: con un dedo no hay «pasar por encima».
-    const conVista = e.pointerType === 'mouse' && animacion === null && tablero !== undefined;
+    // Solo el ratón tiene vista previa al pasar, y solo mientras se juega: con un dedo no hay «pasar por encima».
+    const conVista = e.pointerType === 'mouse' && fase() === 'jugando' && tablero !== undefined;
     moverRaton(conVista && tablero !== undefined ? celdaEn(p, tablero) : null);
   });
   app.canvas.addEventListener('pointerleave', () => moverRaton(null));
 
+  /** Acción de flujo de una tecla, con lo que hay que hacer. Intro y Espacio dependen de la fase. */
+  const accionDeTeclaEnFase = (accion: AccionTecla, f: FaseFlujo): [AccionFlujo, (actual: EstadoInterfaz) => void] => {
+    switch (accion.tipo) {
+      case 'seleccionar':
+        return ['seleccionar', (u) => ejecutar(seleccionar(u, accion.indice))];
+      case 'ciclar':
+        return ['ciclar', (u) => ejecutar(ciclar(u, accion.direccion))];
+      case 'deshacer':
+        return ['deshacer', (u) => ejecutar(deshacer(u))];
+      case 'ritmo':
+        return [
+          'ritmo',
+          () => {
+            ritmo = siguienteRitmo(ritmo, accion.direccion);
+            dibujarCuadroActual();
+          },
+        ];
+      case 'otraRonda':
+        return ['otraRonda', opciones.alPedirOtraRonda];
+      case 'aceptar': {
+        const significado = interpretarAceptar(f);
+        if (significado === 'saltar') return ['saltar', saltarAnimacion];
+        if (significado === 'otraRonda') return ['otraRonda', opciones.alPedirOtraRonda];
+        return ['confirmar', intentarConfirmar];
+      }
+    }
+  };
+
   window.addEventListener('keydown', (e) => {
-    if (ui === undefined) return;
+    const f = fase();
+    if (f === undefined) return;
     const accion = accionDeTecla({ tecla: e.key, ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey });
     if (accion === null) return;
     e.preventDefault();
-    // El ritmo se cambia en cualquier momento, también durante la cascada y con la ronda terminada.
-    if (accion.tipo === 'ritmo') {
-      ritmo = siguienteRitmo(ritmo, accion.direccion);
-      dibujarCuadroActual();
-      return;
-    }
-    if (animacion !== null) {
-      // Durante la cascada, Intro y Espacio saltan al final; las demás teclas no hacen nada.
-      if (accion.tipo === 'aceptar') saltarAnimacion();
-      return;
-    }
-    if (!enJuego(ui.estado)) return;
-    switch (accion.tipo) {
-      case 'seleccionar':
-        return ejecutar(seleccionar(ui, accion.indice));
-      case 'ciclar':
-        return ejecutar(ciclar(ui, accion.direccion));
-      case 'deshacer':
-        return ejecutar(deshacer(ui));
-      case 'aceptar':
-        return intentarConfirmar(ui);
-    }
+    intentar(...accionDeTeclaEnFase(accion, f));
   });
 
   app.renderer.on('resize', dibujar);
   return {
-    mostrarEstado: (estado) => {
-      ui = iniciarControlador(estado);
+    mostrarRonda: (ronda) => {
+      ui = ronda.ui;
+      semilla = ronda.semilla;
+      numeroRonda = ronda.numero;
       animacion = null;
       mensaje = null;
-      medidor = estado.puntos;
+      celdaRaton = null;
+      // El medidor arranca en los puntos de la ronda (0 en una nueva), sin animación.
+      medidor = ronda.ui.estado.puntos;
+      dibujar();
+    },
+    mostrarMensaje: (texto) => {
+      mensaje = texto;
       dibujar();
     },
   };
@@ -384,6 +454,7 @@ function crearBandaSuperior() {
 
   const actualizar = (
     d: DisposicionIndicadores,
+    ronda: number,
     semilla: number,
     lado: number,
     valorRitmo: number,
@@ -393,7 +464,7 @@ function crearBandaSuperior() {
   ): void => {
     const centro = (r: Rect): number => r.y + r.alto / 2;
 
-    encajar(informacion, TEXTOS.informacion(semilla, lado), d.semilla, 0.62);
+    encajar(informacion, TEXTOS.informacion(ronda, semilla, lado), d.semilla, 0.62);
     informacion.position.set(d.semilla.x, centro(d.semilla));
     encajar(ritmo, TEXTOS.ritmo(formatearRitmo(valorRitmo)), d.ritmo, estilo.ritmo.tamano);
     ritmo.position.set(d.ritmo.x + d.ritmo.ancho, centro(d.ritmo));
@@ -742,34 +813,30 @@ function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz, opciones: OpcionesM
   return contenedor;
 }
 
-/** Final de ronda provisional (hasta T3.5): un velo sobre el tablero con el resultado y cómo jugar otra. */
-function dibujarFinDeRonda(t: Rect, resultado: string): Container {
-  const { colores, tipografia, finDeRonda, proporciones } = TEMA;
+/**
+ * Fin de ronda: un velo sobre el tablero con el título (en el color de ganada o de perdida), las líneas del resultado
+ * y el botón primario «Otra ronda».
+ */
+function dibujarFinDeRonda(d: DisposicionFinDeRonda, textos: TextosFinDeRonda, ganada: boolean): Container {
+  const { tipografia, finDeRonda, botonPrimario } = TEMA;
   const contenedor = new Container();
-  if (t.ancho <= 0) return contenedor;
-  contenedor.addChild(
-    new Graphics()
-      .roundRect(t.x, t.y, t.ancho, t.alto, t.ancho * proporciones.radioCelda * 0.3)
-      .fill({ color: colores.fondo, alpha: finDeRonda.velo }),
-  );
-  const lineas: [string, number, 'normal' | 'bold'][] = [
-    [resultado, finDeRonda.titulo, tipografia.pesoInformacion],
-    [TEXTOS.recargar, finDeRonda.nota, 'normal'],
-  ];
-  for (const [i, [texto, tamano, peso]] of lineas.entries()) {
-    const etiqueta = new Text({
+  const v = d.velo;
+  if (v.ancho <= 0 || v.alto <= 0) return contenedor;
+  contenedor.addChild(new Graphics().rect(v.x, v.y, v.ancho, v.alto).fill({ color: finDeRonda.velo.color, alpha: finDeRonda.velo.opacidad }));
+  const linea = (texto: string, r: Rect, color: number, peso: 'normal' | 'bold', fraccion: number): void => {
+    if (r.ancho <= 0 || r.alto <= 0) return;
+    const t = new Text({
       text: texto,
-      style: {
-        fontFamily: tipografia.familia,
-        fontWeight: peso,
-        fontSize: Math.max(1, Math.min(t.ancho * tamano, (t.ancho * 1.6) / Math.max(1, texto.length))),
-        fill: colores.texto,
-        align: 'center',
-      },
+      style: { fontFamily: tipografia.familia, fontWeight: peso, fontSize: tamanoQueCabe(texto, r.ancho, r.alto * fraccion), fill: color },
     });
-    etiqueta.anchor.set(0.5);
-    etiqueta.position.set(t.x + t.ancho / 2, t.y + t.alto / 2 + (i === 0 ? -1 : 1) * t.alto * 0.07);
-    contenedor.addChild(etiqueta);
-  }
+    t.anchor.set(0.5);
+    t.position.set(r.x + r.ancho / 2, r.y + r.alto / 2);
+    contenedor.addChild(t);
+  };
+  linea(textos.titulo, d.titulo, ganada ? finDeRonda.titulo.ganada : finDeRonda.titulo.perdida, 'bold', 0.85);
+  const [puntos, tiradas] = d.lineas;
+  if (puntos !== undefined) linea(textos.puntos, puntos, finDeRonda.texto, 'bold', 0.8);
+  if (tiradas !== undefined) linea(textos.tiradas, tiradas, finDeRonda.texto, 'normal', 0.8);
+  contenedor.addChild(dibujarBoton(d.boton, textos.boton, botonPrimario.activo));
   return contenedor;
 }

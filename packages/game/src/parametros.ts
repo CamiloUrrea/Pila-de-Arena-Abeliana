@@ -1,5 +1,6 @@
-// Parseo puro de los parámetros de la URL: sin DOM ni azar global. La semilla por defecto la genera una función
-// inyectada, así que el resultado depende solo de sus argumentos.
+// Parámetros de la URL. El parseo y la reescritura de la consulta son puros: sin DOM ni azar global. La semilla por
+// defecto la genera una función inyectada (`semillaAleatoria` en el navegador), así que el resultado de
+// `leerParametros` depende solo de sus argumentos.
 import { RITMOS, RITMO_POR_DEFECTO } from './ritmo.ts';
 import { formatearPuntos } from './textos.ts';
 
@@ -97,4 +98,21 @@ export function leerParametros(busqueda: string, generarSemilla: () => number): 
 
   if (errores.length > 0) return { ok: false, errores };
   return { ok: true, valor: { semilla: semilla ?? generarSemilla(), lado, ritmo } };
+}
+
+/** Semilla aleatoria de 32 bits del generador criptográfico (`crypto.getRandomValues`), para inyectarla. */
+export function semillaAleatoria(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] ?? 0;
+}
+
+/**
+ * Cadena de consulta (con `?`) con `semilla` sustituida, o añadida al final si no había, conservando los demás
+ * parámetros (`lado`, `ritmo` y los desconocidos) en su orden y sin duplicar `semilla`. Los valores se escapan con
+ * `URLSearchParams`. Con una semilla que no es un entero de 0 a 4294967295 devuelve la consulta sin cambiarla.
+ */
+export function urlConSemilla(busqueda: string, semilla: number): string {
+  const url = new URLSearchParams(busqueda);
+  if (Number.isInteger(semilla) && semilla >= 0 && semilla <= SEMILLA_MAXIMA) url.set('semilla', String(semilla));
+  const texto = url.toString();
+  return texto === '' ? '' : `?${texto}`;
 }

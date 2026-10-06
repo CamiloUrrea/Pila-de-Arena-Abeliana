@@ -211,8 +211,12 @@ export type Tema = {
       readonly alfaMaxima: number;
     };
   };
-  /** Texto central del final de ronda, como fracción del lado del tablero. */
-  readonly finDeRonda: { readonly titulo: number; readonly nota: number; readonly velo: number };
+  /** Fin de ronda: un velo sobre el tablero con el resultado y el botón «Otra ronda» (primario, `botonPrimario`). */
+  readonly finDeRonda: {
+    readonly velo: { readonly color: number; readonly opacidad: number };
+    readonly titulo: { readonly ganada: number; readonly perdida: number };
+    readonly texto: number;
+  };
   readonly tipografia: {
     /** Fuente del sistema. */
     readonly familia: string;
@@ -316,7 +320,11 @@ export const TEMA: Tema = {
     mazo: { texto: 0xb8aee0 },
     cargada: { color: 0xf5f0ff, grosor: 0.5, periodoMs: 1200, alfaMinima: 0.5, alfaMaxima: 1 },
   },
-  finDeRonda: { titulo: 0.09, nota: 0.045, velo: 0.82 },
+  finDeRonda: {
+    velo: { color: 0x0a0420, opacidad: 0.92 },
+    titulo: { ganada: 0xffe600, perdida: 0xff2e93 },
+    texto: 0xf5f0ff,
+  },
   tipografia: {
     familia: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     pesoCarga: 'bold',

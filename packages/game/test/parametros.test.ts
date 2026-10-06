@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { LADO_POR_DEFECTO, leerParametros } from '../src/parametros.ts';
+import { LADO_POR_DEFECTO, leerParametros, semillaAleatoria, urlConSemilla } from '../src/parametros.ts';
 import { RITMOS } from '../src/ritmo.ts';
 
 const SEMILLA_INYECTADA = 777;
@@ -99,5 +99,63 @@ describe('parámetro ritmo', () => {
 
   it('acepta valores equivalentes escritos con ceros de más, como 0.50', () => {
     expect(leer('?semilla=1&ritmo=0.50')).toEqual({ ok: true, valor: { semilla: 1, lado: 3, ritmo: 0.5 } });
+  });
+});
+
+describe('urlConSemilla', () => {
+  it('sustituye la semilla existente y conserva lado, ritmo y desconocidos en su orden', () => {
+    expect(urlConSemilla('?lado=4&semilla=7&ritmo=2&modo=x', 99)).toBe('?lado=4&semilla=99&ritmo=2&modo=x');
+    expect(urlConSemilla('?semilla=1&lado=5', 2)).toBe('?semilla=2&lado=5');
+  });
+
+  it('añade la semilla al final si no había, también sin «?» o con la consulta vacía', () => {
+    expect(urlConSemilla('?lado=4&ritmo=0.5', 12)).toBe('?lado=4&ritmo=0.5&semilla=12');
+    expect(urlConSemilla('lado=3', 0)).toBe('?lado=3&semilla=0');
+    expect(urlConSemilla('', 4294967295)).toBe('?semilla=4294967295');
+  });
+
+  it('no duplica la semilla aunque la URL la repita', () => {
+    const r = urlConSemilla('?semilla=1&lado=2&semilla=3', 5);
+    expect(new URLSearchParams(r).getAll('semilla')).toEqual(['5']);
+    expect(new URLSearchParams(r).get('lado')).toBe('2');
+  });
+
+  it('escapa los valores y conserva los desconocidos tal cual', () => {
+    const r = urlConSemilla('?nota=a%20b%26c&lado=3', 8);
+    const p = new URLSearchParams(r);
+    expect(p.get('nota')).toBe('a b&c');
+    expect(p.get('semilla')).toBe('8');
+    expect(r).not.toContain(' ');
+  });
+
+  it('el resultado se lee de vuelta con leerParametros con la semilla nueva y el resto igual', () => {
+    const r = leer(urlConSemilla('?lado=6&ritmo=3&semilla=1', 31337));
+    expect(r).toEqual({ ok: true, valor: { semilla: 31337, lado: 6, ritmo: 3 } });
+  });
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 4294967296])('con la semilla inválida %d no lanza y deja la consulta igual', (s) => {
+    expect(() => urlConSemilla('?lado=4&semilla=7', s)).not.toThrow();
+    expect(urlConSemilla('?lado=4&semilla=7', s)).toBe('?lado=4&semilla=7');
+  });
+
+  it('propiedad: con cualquier semilla válida, el lado y el ritmo se conservan', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 0xffffffff }), fc.integer({ min: 1, max: 9 }), (s, lado) => {
+        const p = new URLSearchParams(urlConSemilla(`?lado=${lado}&ritmo=2`, s));
+        expect([p.get('lado'), p.get('ritmo'), p.get('semilla')]).toEqual([String(lado), '2', String(s)]);
+        expect([...p.keys()]).toEqual(['lado', 'ritmo', 'semilla']);
+      }),
+    );
+  });
+});
+
+describe('semillaAleatoria', () => {
+  it('da enteros de 32 bits sin signo', () => {
+    for (let i = 0; i < 20; i++) {
+      const s = semillaAleatoria();
+      expect(Number.isInteger(s)).toBe(true);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(0xffffffff);
+    }
   });
 });
