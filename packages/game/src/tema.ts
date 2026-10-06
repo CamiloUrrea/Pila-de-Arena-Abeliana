@@ -1,5 +1,6 @@
 // Aspecto provisional del cliente: todos los colores, proporciones y tipografía están aquí. El arte definitivo
 // sustituirá estos valores sin tocar la lógica de presentación.
+import type { TipoGrano } from '@pila/core';
 
 /** Reparto vertical de la ventana en tres bandas horizontales; las fracciones suman 1. */
 export type Bandas = {
@@ -11,6 +12,19 @@ export type Bandas = {
   readonly inferior: number;
 };
 
+/** Aspecto de una ficha de la mano según su tipo de grano. */
+export type AspectoFicha = {
+  readonly forma: 'circulo' | 'estrella';
+  readonly color: number;
+  /** Tamaño como fracción del radio del hueco de la ficha (como mucho 1, para dejar sitio al anillo). */
+  readonly escala: number;
+  /** Puntos de grano dibujados dentro de la ficha, con `colores.grano`. */
+  readonly puntos: number;
+};
+
+/** Colores de un estado del botón Deshacer. */
+export type AspectoBoton = { readonly fondo: number; readonly texto: number };
+
 export type Tema = {
   readonly colores: {
     readonly fondo: number;
@@ -20,8 +34,13 @@ export type Tema = {
     readonly inestable: number;
     /** Puntos de grano y número de respaldo, sobre cualquier celda con color. */
     readonly grano: number;
-    /** Texto de la banda superior. */
+    /** Texto de la banda superior y de la descripción del grano. */
     readonly texto: number;
+    /**
+     * Contorno de los puntos fantasma sobre la celda vacía, donde `grano` casi no se distinguiría. Sobre las
+     * demás celdas los fantasmas usan `grano`.
+     */
+    readonly fantasmaSobreVacia: number;
     /** Color CSS del mensaje de error, que se pinta con el DOM antes de que exista PixiJS. */
     readonly error: string;
   };
@@ -46,7 +65,47 @@ export type Tema = {
     /** Distancia del centro a cada fila o columna exterior de la disposición tipo dado. */
     readonly desplazamiento: number;
     readonly radio: number;
+    /** Grosor del contorno de un punto fantasma (previsto), como fracción de su radio. */
+    readonly grosorFantasma: number;
   };
+  /**
+   * Contorno de una celda que la vista previa vuelve inestable: un trazo exterior y un filete interior. Con dos
+   * colores, uno claro y otro oscuro, el contorno se distingue sobre el fondo y sobre cualquier celda.
+   */
+  readonly contornoPrevisto: {
+    readonly exterior: number;
+    readonly interior: number;
+    /** Grosor de cada trazo, como fracción del lado de la celda. */
+    readonly grosor: number;
+  };
+  /** Banda inferior: la mano, la descripción del grano seleccionado y el botón Deshacer. */
+  readonly mano: {
+    /** Margen interior de la banda, como fracción del menor de sus lados. */
+    readonly margen: number;
+    /** Alto de la fila de fichas, como fracción del alto útil de la banda; el resto es para la descripción. */
+    readonly fila: number;
+    /** Hueco entre fichas, como fracción del diámetro de una ficha. */
+    readonly hueco: number;
+    /** Ancho máximo del botón, como fracción del ancho de la banda y como múltiplo de su alto útil. */
+    readonly anchoBoton: number;
+    readonly anchoBotonPorAlto: number;
+    /** Alto del botón como fracción de su ancho (sin pasar del alto de la fila). */
+    readonly altoBoton: number;
+    readonly radioBoton: number;
+    /** Tamaño del texto del botón y de la descripción, como fracción del alto de su rectángulo. */
+    readonly textoBoton: number;
+    readonly textoDescripcion: number;
+  };
+  readonly fichas: {
+    readonly tipos: Readonly<Record<TipoGrano, AspectoFicha>>;
+    /** Opacidad de una ficha ya colocada en el tablero. */
+    readonly alfaColocada: number;
+    /** Anillo de la ficha seleccionada; el grosor es fracción del radio del hueco. */
+    readonly anillo: { readonly color: number; readonly grosor: number };
+    /** Estrella: número de puntas y radio interior como fracción del exterior. */
+    readonly estrella: { readonly puntas: number; readonly radioInterior: number };
+  };
+  readonly boton: { readonly activo: AspectoBoton; readonly desactivado: AspectoBoton };
   readonly tipografia: {
     /** Fuente del sistema. */
     readonly familia: string;
@@ -68,6 +127,7 @@ export const TEMA: Tema = {
     inestable: 0xff3d00,
     grano: 0x0a0420,
     texto: 0xf5f0ff,
+    fantasmaSobreVacia: 0xf5f0ff,
     error: '#f1a08a',
   },
   bandas: BANDAS_INICIALES,
@@ -78,7 +138,33 @@ export const TEMA: Tema = {
     textoCelda: 0.42,
     textoInformacion: 0.28,
   },
-  granos: { desplazamiento: 0.25, radio: 0.085 },
+  granos: { desplazamiento: 0.25, radio: 0.085, grosorFantasma: 0.3 },
+  contornoPrevisto: { exterior: 0xff3d00, interior: 0x0a0420, grosor: 0.045 },
+  mano: {
+    margen: 0.06,
+    fila: 0.62,
+    hueco: 0.3,
+    anchoBoton: 0.2,
+    anchoBotonPorAlto: 1.4,
+    altoBoton: 0.4,
+    radioBoton: 0.25,
+    textoBoton: 0.42,
+    textoDescripcion: 0.45,
+  },
+  fichas: {
+    tipos: {
+      normal: { forma: 'circulo', color: 0xf5f0ff, escala: 0.62, puntos: 0 },
+      pesado: { forma: 'circulo', color: 0xb388ff, escala: 0.84, puntos: 2 },
+      explosivo: { forma: 'estrella', color: 0xff1744, escala: 0.88, puntos: 0 },
+    },
+    alfaColocada: 0.28,
+    anillo: { color: 0xf5f0ff, grosor: 0.09 },
+    estrella: { puntas: 5, radioInterior: 0.5 },
+  },
+  boton: {
+    activo: { fondo: 0xf5f0ff, texto: 0x0a0420 },
+    desactivado: { fondo: 0x22144d, texto: 0x6f6596 },
+  },
   tipografia: {
     familia: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     pesoCarga: 'bold',

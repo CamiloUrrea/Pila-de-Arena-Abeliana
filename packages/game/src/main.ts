@@ -1,8 +1,9 @@
-// Punto de entrada del cliente: lee la URL, crea la ronda con el núcleo y la dibuja.
+// Punto de entrada del cliente: lee la URL, crea la ronda con el núcleo y la muestra, lista para colocar granos.
 import { CONFIG_INICIAL, crearRonda } from '@pila/core';
 import { leerParametros } from './parametros.ts';
 import { crearEscena } from './render.ts';
 import { TEMA } from './tema.ts';
+import { TEXTOS } from './textos.ts';
 
 /** Semilla aleatoria para cuando la URL no trae una: 32 bits del generador criptográfico del navegador. */
 function semillaAleatoria(): number {
@@ -38,7 +39,7 @@ async function arrancar(): Promise<void> {
   const parametros = leerParametros(window.location.search, semillaAleatoria);
   if (!parametros.ok) {
     mostrarError(
-      'No se puede empezar la ronda',
+      TEXTOS.errorInicio,
       parametros.errores.map((e) => e.mensaje),
     );
     return;
@@ -46,7 +47,7 @@ async function arrancar(): Promise<void> {
   const { semilla, lado } = parametros.valor;
   const ronda = crearRonda({ ...CONFIG_INICIAL, lado }, semilla);
   if (!ronda.ok) {
-    mostrarError('No se puede empezar la ronda', [`Configuración inválida: ${ronda.error.campo}: ${ronda.error.motivo}.`]);
+    mostrarError(TEXTOS.errorInicio, [TEXTOS.configuracionInvalida(ronda.error.campo, ronda.error.motivo)]);
     return;
   }
   const contenedor = document.getElementById('juego') ?? document.body;

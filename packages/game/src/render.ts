@@ -1,18 +1,29 @@
-// Único módulo que usa PixiJS: dibuja lo que describen `disponer` y `describirCeldas`, sin decidir nada.
+// Único módulo que usa PixiJS: dibuja lo que describen `disponer`, `disponerMano` y `describirCeldas`, y traduce
+// clics, toques y teclas a llamadas al controlador puro. No decide nada del juego.
 import { Application, Container, Graphics, Text } from 'pixi.js';
+import type { FederatedPointerEvent } from 'pixi.js';
 import type { Estado } from '@pila/core';
-import { disponer } from './disposicion.ts';
+import { colocar, deshacer, iniciarControlador } from './controlador.ts';
+import type { EstadoInterfaz, PasoInterfaz } from './controlador.ts';
+import { botonDeshacerEn, celdaEn, disponer, disponerMano } from './disposicion.ts';
+import type { Disposicion, DisposicionMano, Punto, Rect } from './disposicion.ts';
+import { calcularPrevistas } from './previsualizacion.ts';
 import { TEMA } from './tema.ts';
-import { describirCeldas } from './vista.ts';
+import { TEXTOS, describirGrano } from './textos.ts';
+import { PATRONES_GRANOS, describirCeldas } from './vista.ts';
+import type { CeldaDescrita } from './vista.ts';
 
 export type Escena = {
-  /** Dibuja el estado; se vuelve a dibujar solo al redimensionar la ventana. */
+  /** Muestra un estado nuevo y selecciona su primer grano sin colocar. */
   readonly mostrarEstado: (estado: Estado) => void;
 };
 
+/** Teclas que deshacen la última colocación. */
+const TECLAS_DESHACER: ReadonlySet<string> = new Set(['z', 'Z', 'Backspace']);
+
 /**
- * Crea la aplicación de PixiJS dentro de `contenedor`, ajustada a la ventana y a la densidad de píxeles.
- * `semilla` solo se muestra en la banda superior: el estado no la guarda.
+ * Crea la aplicación de PixiJS dentro de `contenedor`, ajustada a la ventana y a la densidad de píxeles, y atiende
+ * los gestos del jugador. `semilla` solo se muestra en la banda superior: el estado no la guarda.
  */
 export async function crearEscena(contenedor: HTMLElement, semilla: number): Promise<Escena> {
   const app = new Application();
@@ -27,65 +38,206 @@ export async function crearEscena(contenedor: HTMLElement, semilla: number): Pro
 
   const capa = new Container();
   app.stage.addChild(capa);
-  let actual: Estado | undefined;
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
+
+  let ui: EstadoInterfaz | undefined;
+  let tablero: Disposicion | undefined;
+  let mano: DisposicionMano | undefined;
 
   const dibujar = (): void => {
-    for (const hijo of capa.removeChildren()) hijo.destroy();
-    if (actual === undefined) return;
-    const { lado, umbral } = actual.config;
-    const d = disponer(app.screen.width, app.screen.height, lado);
-    const { proporciones, tipografia, colores } = TEMA;
-
-    const informacion = new Text({
-      text: `semilla ${semilla} · lado ${lado}`,
-      style: {
-        fontFamily: tipografia.familia,
-        fontSize: Math.max(1, d.bandaSuperior.alto * proporciones.textoInformacion),
-        fontWeight: tipografia.pesoInformacion,
-        fill: colores.texto,
-      },
-    });
-    informacion.anchor.set(0.5);
-    informacion.position.set(d.bandaSuperior.x + d.bandaSuperior.ancho / 2, d.bandaSuperior.y + d.bandaSuperior.alto / 2);
-    capa.addChild(informacion);
-
-    if (d.celda <= 0) return;
-    for (const c of describirCeldas(actual.celdas, umbral)) {
-      const r = d.celdas[c.y]?.[c.x];
-      if (r === undefined) continue;
-      const fondo = new Graphics().roundRect(r.x, r.y, r.ancho, r.alto, r.ancho * proporciones.radioCelda).fill(c.color);
-      capa.addChild(fondo);
-      const centroX = r.x + r.ancho / 2;
-      const centroY = r.y + r.alto / 2;
-      if (c.granos.length > 0) {
-        const puntos = new Graphics();
-        for (const g of c.granos) {
-          puntos.circle(centroX + g.x * r.ancho, centroY + g.y * r.alto, c.radioGrano * r.ancho).fill(colores.grano);
-        }
-        capa.addChild(puntos);
-      }
-      if (c.texto !== undefined) {
-        const numero = new Text({
-          text: c.texto,
-          style: {
-            fontFamily: tipografia.familia,
-            fontWeight: tipografia.pesoCarga,
-            fontSize: Math.max(1, r.ancho * proporciones.textoCelda),
-            fill: colores.grano,
-          },
-        });
-        numero.anchor.set(0.5);
-        numero.position.set(centroX, centroY);
-        capa.addChild(numero);
-      }
-    }
+    for (const hijo of capa.removeChildren()) hijo.destroy({ children: true });
+    if (ui === undefined) return;
+    const { estado } = ui;
+    const ventana = { ancho: app.screen.width, alto: app.screen.height };
+    tablero = disponer(ventana.ancho, ventana.alto, estado.config.lado);
+    mano = disponerMano(ventana, estado.mano.length);
+    capa.addChild(dibujarInformacion(tablero.bandaSuperior, semilla, estado.config.lado));
+    capa.addChild(dibujarTablero(tablero, estado));
+    capa.addChild(dibujarMano(mano, ui));
   };
+
+  /** Aplica un paso del controlador: si es un error no hace nada visible; si no, redibuja. */
+  const aplicarPaso = (paso: { readonly ok: true; readonly valor: PasoInterfaz } | { readonly ok: false }): void => {
+    if (!paso.ok) return;
+    ui = paso.valor.ui;
+    dibujar();
+  };
+
+  const objetivo = (p: Punto): 'celda' | 'deshacer' | null => {
+    if (ui === undefined) return null;
+    if (tablero !== undefined && ui.seleccionado !== null && celdaEn(p, tablero) !== null) return 'celda';
+    if (mano !== undefined && ui.estado.ordenColocacion.length > 0 && botonDeshacerEn(p, mano)) return 'deshacer';
+    return null;
+  };
+
+  app.stage.on('pointertap', (e: FederatedPointerEvent) => {
+    if (ui === undefined) return;
+    const p = { x: e.global.x, y: e.global.y };
+    const celda = tablero === undefined ? null : celdaEn(p, tablero);
+    if (celda !== null) aplicarPaso(colocar(ui, celda.x, celda.y));
+    else if (mano !== undefined && botonDeshacerEn(p, mano)) aplicarPaso(deshacer(ui));
+  });
+  app.stage.on('pointermove', (e: FederatedPointerEvent) => {
+    app.canvas.style.cursor = objetivo({ x: e.global.x, y: e.global.y }) === null ? 'default' : 'pointer';
+  });
+  window.addEventListener('keydown', (e) => {
+    if (ui === undefined || !TECLAS_DESHACER.has(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    aplicarPaso(deshacer(ui));
+  });
 
   app.renderer.on('resize', dibujar);
   return {
     mostrarEstado: (estado) => {
-      actual = estado;
+      ui = iniciarControlador(estado);
       dibujar();
     },
   };
+}
+
+function dibujarInformacion(banda: Rect, semilla: number, lado: number): Text {
+  const { proporciones, tipografia, colores } = TEMA;
+  const informacion = new Text({
+    text: TEXTOS.informacion(semilla, lado),
+    style: {
+      fontFamily: tipografia.familia,
+      fontSize: Math.max(1, banda.alto * proporciones.textoInformacion),
+      fontWeight: tipografia.pesoInformacion,
+      fill: colores.texto,
+    },
+  });
+  informacion.anchor.set(0.5);
+  informacion.position.set(banda.x + banda.ancho / 2, banda.y + banda.alto / 2);
+  return informacion;
+}
+
+function dibujarTablero(d: Disposicion, estado: Estado): Container {
+  const contenedor = new Container();
+  if (d.celda <= 0) return contenedor;
+  const { previstas } = calcularPrevistas(estado);
+  for (const c of describirCeldas(estado.celdas, estado.config.umbral, previstas)) {
+    const r = d.celdas[c.y]?.[c.x];
+    if (r !== undefined) contenedor.addChild(dibujarCelda(r, c));
+  }
+  return contenedor;
+}
+
+function dibujarCelda(r: Rect, c: CeldaDescrita): Container {
+  const { proporciones, tipografia, colores, granos, contornoPrevisto } = TEMA;
+  const contenedor = new Container();
+  const radioEsquina = r.ancho * proporciones.radioCelda;
+  const g = new Graphics().roundRect(r.x, r.y, r.ancho, r.alto, radioEsquina).fill(c.color);
+
+  if (c.inestablePrevista) {
+    // Trazo exterior en el borde y filete interior justo dentro, ambos dentro de la celda.
+    const w = r.ancho * contornoPrevisto.grosor;
+    const trazo = (inset: number, color: number) =>
+      g
+        .roundRect(r.x + inset, r.y + inset, r.ancho - 2 * inset, r.alto - 2 * inset, Math.max(0, radioEsquina - inset))
+        .stroke({ width: w, color });
+    trazo(w / 2, contornoPrevisto.exterior);
+    trazo((3 * w) / 2, contornoPrevisto.interior);
+  }
+
+  const cx = r.x + r.ancho / 2;
+  const cy = r.y + r.alto / 2;
+  const radio = c.radioGrano * r.ancho;
+  for (const p of c.granos) {
+    const x = cx + p.x * r.ancho;
+    const y = cy + p.y * r.alto;
+    if (p.fantasma) {
+      // Solo el contorno, trazado hacia dentro para que el punto no crezca.
+      const w = radio * granos.grosorFantasma;
+      g.circle(x, y, radio - w / 2).stroke({ width: w, color: c.colorTinta });
+    } else {
+      g.circle(x, y, radio).fill(colores.grano);
+    }
+  }
+  contenedor.addChild(g);
+
+  if (c.texto !== undefined) {
+    const numero = new Text({
+      text: c.texto,
+      style: {
+        fontFamily: tipografia.familia,
+        fontWeight: tipografia.pesoCarga,
+        fontSize: Math.max(1, r.ancho * proporciones.textoCelda),
+        fill: c.colorTinta,
+      },
+    });
+    numero.anchor.set(0.5);
+    numero.position.set(cx, cy);
+    contenedor.addChild(numero);
+  }
+  return contenedor;
+}
+
+function dibujarMano(d: DisposicionMano, ui: EstadoInterfaz): Container {
+  const { fichas: aspecto, colores, granos, tipografia, mano: proporciones, boton } = TEMA;
+  const contenedor = new Container();
+
+  for (const [i, f] of d.fichas.entries()) {
+    const grano = ui.estado.mano[i];
+    if (grano === undefined || f.radio <= 0) continue;
+    const a = aspecto.tipos[grano.tipo];
+    const ficha = new Graphics();
+    const radio = f.radio * a.escala;
+    if (a.forma === 'estrella') {
+      ficha.star(f.x, f.y, aspecto.estrella.puntas, radio, radio * aspecto.estrella.radioInterior).fill(a.color);
+    } else {
+      ficha.circle(f.x, f.y, radio).fill(a.color);
+    }
+    // Los puntos de la ficha usan la disposición de los granos, tomando su diámetro como el lado de una celda.
+    const lado = 2 * radio;
+    for (const [px, py] of PATRONES_GRANOS[a.puntos] ?? []) {
+      ficha.circle(f.x + px * granos.desplazamiento * lado, f.y + py * granos.desplazamiento * lado, granos.radio * lado);
+    }
+    if (a.puntos > 0) ficha.fill(colores.grano);
+    if (grano.celda !== null) ficha.alpha = aspecto.alfaColocada;
+    contenedor.addChild(ficha);
+
+    if (i === ui.seleccionado) {
+      const w = f.radio * aspecto.anillo.grosor;
+      contenedor.addChild(new Graphics().circle(f.x, f.y, f.radio - w / 2).stroke({ width: w, color: aspecto.anillo.color }));
+    }
+  }
+
+  const activo = ui.estado.ordenColocacion.length > 0;
+  const estilo = activo ? boton.activo : boton.desactivado;
+  const r = d.deshacer;
+  if (r.ancho > 0 && r.alto > 0) {
+    contenedor.addChild(new Graphics().roundRect(r.x, r.y, r.ancho, r.alto, r.alto * proporciones.radioBoton).fill(estilo.fondo));
+    const texto = new Text({
+      text: TEXTOS.deshacer,
+      style: {
+        fontFamily: tipografia.familia,
+        fontWeight: tipografia.pesoInformacion,
+        fontSize: Math.max(1, Math.min(r.alto * proporciones.textoBoton, r.ancho / 6)),
+        fill: estilo.texto,
+      },
+    });
+    texto.anchor.set(0.5);
+    texto.position.set(r.x + r.ancho / 2, r.y + r.alto / 2);
+    contenedor.addChild(texto);
+  }
+
+  const seleccionado = ui.seleccionado === null ? undefined : ui.estado.mano[ui.seleccionado];
+  const linea = seleccionado === undefined ? TEXTOS.manoCompleta : describirGrano(seleccionado.tipo);
+  const rd = d.descripcion;
+  if (rd.ancho > 0 && rd.alto > 0) {
+    // El tamaño se limita también por el ancho, para que la línea quepa en ventanas estrechas.
+    const descripcion = new Text({
+      text: linea,
+      style: {
+        fontFamily: tipografia.familia,
+        fontSize: Math.max(1, Math.min(rd.alto * proporciones.textoDescripcion, (rd.ancho / Math.max(1, linea.length)) * 1.8)),
+        fill: colores.texto,
+      },
+    });
+    descripcion.anchor.set(0.5);
+    descripcion.position.set(rd.x + rd.ancho / 2, rd.y + rd.alto / 2);
+    contenedor.addChild(descripcion);
+  }
+  return contenedor;
 }

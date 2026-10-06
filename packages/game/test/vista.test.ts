@@ -136,6 +136,76 @@ describe('granos como puntos', () => {
   });
 });
 
+describe('vista previa en describirCeldas', () => {
+  const solidos = (c: CeldaDescrita | undefined) => c?.granos.filter((p) => !p.fantasma).length;
+  const fantasmas = (c: CeldaDescrita | undefined) => c?.granos.filter((p) => p.fantasma).length;
+
+  it('dibuja carga + previstos puntos: los primeros carga sólidos y el resto fantasma', () => {
+    const d = describirCeldas([[0, 1, 2, 3, 3]], 99, [[2, 3, 0, 1, 6]]);
+    expect(d.map((c) => c.previstos)).toEqual([2, 3, 0, 1, 6]);
+    expect(d.map((c) => c.granos.length)).toEqual([2, 4, 2, 4, 9]);
+    expect(d.map(solidos)).toEqual([0, 1, 2, 3, 3]);
+    expect(d.map(fantasmas)).toEqual([2, 3, 0, 1, 6]);
+    // Los fantasmas van al final y la disposición es la del total.
+    for (const c of d) {
+      expect(c.granos.slice(0, c.carga).every((p) => !p.fantasma)).toBe(true);
+      expect(c.granos.map((p) => [p.x, p.y])).toEqual(unaCelda(c.carga + c.previstos).granos.map((p) => [p.x, p.y]));
+    }
+  });
+
+  it('con 10 o más en total no hay puntos y el número es el total', () => {
+    const d = describirCeldas([[3, 0, 3]], 99, [[7, 12, 6]]);
+    expect(d.map((c) => c.texto)).toEqual(['10', '12', undefined]);
+    expect(d.map((c) => c.granos.length)).toEqual([0, 0, 9]);
+  });
+
+  it('inestablePrevista solo si la proyección alcanza el umbral y la carga actual no', () => {
+    const d = describirCeldas([[2, 2, 3, 0, 4, 5]], 4, [[2, 1, 0, 9, 1, 0]]);
+    expect(d.map((c) => c.inestablePrevista)).toEqual([true, false, false, true, false, false]);
+    expect(d.map((c) => c.inestable)).toEqual([false, false, false, false, true, true]);
+  });
+
+  it('sin previstas se comporta igual que con todo a cero, sin fantasmas ni inestables previstas', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 9 }).chain((lado) =>
+          fc.array(fc.array(fc.integer({ min: 0, max: 12 }), { minLength: lado, maxLength: lado }), { minLength: lado, maxLength: lado }),
+        ),
+        (celdas) => {
+          const sin = describirCeldas(celdas, UMBRAL);
+          expect(sin).toEqual(describirCeldas(celdas, UMBRAL, celdas.map((f) => f.map(() => 0))));
+          for (const c of sin) {
+            expect(c.previstos).toBe(0);
+            expect(c.inestablePrevista).toBe(false);
+            expect(c.granos.every((p) => !p.fantasma)).toBe(true);
+          }
+        },
+      ),
+    );
+  });
+
+  it('el color de tinta es claro sobre la celda vacía y el de los puntos sobre las demás', () => {
+    const d = describirCeldas([[0, 1, 2, 3, 5]], UMBRAL, [[1, 1, 1, 1, 1]]);
+    expect(d.map((c) => c.colorTinta)).toEqual([
+      TEMA.colores.fantasmaSobreVacia,
+      TEMA.colores.grano,
+      TEMA.colores.grano,
+      TEMA.colores.grano,
+      TEMA.colores.grano,
+    ]);
+  });
+
+  it('no muta las previstas', () => {
+    const previstas = [
+      [1, 0],
+      [0, 2],
+    ];
+    const copia = structuredClone(previstas);
+    describirCeldas([[0, 1], [2, 3]], UMBRAL, Object.freeze(previstas.map((f) => Object.freeze(f))));
+    expect(previstas).toEqual(copia);
+  });
+});
+
 describe('integración con @pila/core', () => {
   it.each([0, 1, 2026, 123456789, 4294967295])('crearRonda con la semilla %i: una descripción por celda y ninguna inestable', (semilla) => {
     for (const lado of [1, 3, 5, 9]) {

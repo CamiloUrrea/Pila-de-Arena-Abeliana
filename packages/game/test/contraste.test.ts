@@ -2,6 +2,7 @@
 // sin que salte un fallo. Usan la razón de contraste de WCAG 2 (luminancia relativa).
 import { describe, expect, it } from 'vitest';
 import { TEMA } from '../src/tema.ts';
+import { describirCeldas } from '../src/vista.ts';
 
 /** Luminancia relativa de WCAG de un color 0xRRGGBB. */
 function luminancia(color: number): number {
@@ -50,5 +51,41 @@ describe('contraste de la paleta (WCAG)', () => {
 
   it('el texto de la banda superior se lee sobre el fondo (al menos 7)', () => {
     expect(contraste(colores.texto, colores.fondo)).toBeGreaterThanOrEqual(7);
+  });
+});
+
+describe('contraste de la vista previa y de la mano (WCAG)', () => {
+  // Superficies sobre las que puede caer el contorno de una celda inestable prevista: el fondo y las celdas estables.
+  const superficies: [string, number | undefined][] = [
+    ['el fondo', colores.fondo],
+    ['la celda vacía', colores.carga[0]],
+    ['la carga 1', colores.carga[1]],
+    ['la carga 2', colores.carga[2]],
+    ['la carga 3', colores.carga[3]],
+  ];
+
+  it.each(superficies)('el doble contorno de una inestable prevista se distingue sobre %s (al menos 3)', (_, superficie) => {
+    // Con dos trazos, uno claro y otro oscuro, basta con que uno de los dos contraste.
+    expect(superficie).toBeDefined();
+    const { exterior, interior } = TEMA.contornoPrevisto;
+    const s = superficie ?? colores.fondo;
+    expect(Math.max(contraste(exterior, s), contraste(interior, s))).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([0, 1, 2, 3, 4, 5])('los puntos fantasma se distinguen sobre una celda con carga %i (al menos 3)', (carga) => {
+    // Un fantasma siempre se dibuja sobre una celda, nunca sobre el fondo: se mide contra el color de esa celda.
+    const [c] = describirCeldas([[carga]], 4, [[1]]);
+    if (c === undefined) throw new Error('sin descripción');
+    expect(contraste(c.colorTinta, c.color)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(Object.entries(TEMA.fichas.tipos))('la ficha %s se distingue sobre el fondo (al menos 3)', (_, aspecto) => {
+    expect(contraste(aspecto.color, colores.fondo)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('el botón Deshacer activo destaca sobre el fondo (al menos 3) y su texto se lee (al menos 4,5)', () => {
+    const { activo } = TEMA.boton;
+    expect(contraste(activo.fondo, colores.fondo)).toBeGreaterThanOrEqual(3);
+    expect(contraste(activo.texto, activo.fondo)).toBeGreaterThanOrEqual(4.5);
   });
 });

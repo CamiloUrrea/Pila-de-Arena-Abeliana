@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { disponer } from '../src/disposicion.ts';
+import { botonDeshacerEn, celdaEn, disponer, disponerMano } from '../src/disposicion.ts';
 import type { Disposicion, Rect } from '../src/disposicion.ts';
 import { BANDAS_INICIALES, TEMA } from '../src/tema.ts';
 
@@ -105,5 +105,140 @@ describe('disposición', () => {
   it('rechaza un lado que no sea un entero ≥ 1', () => {
     expect(() => disponer(800, 600, 0)).toThrow(RangeError);
     expect(() => disponer(800, 600, 2.5)).toThrow(RangeError);
+  });
+});
+
+/** Comprueba la disposición de la mano para una ventana y un número de fichas. */
+function comprobarMano(ancho: number, alto: number, n: number): void {
+  const d = disponerMano({ ancho, alto }, n);
+  const banda = disponer(ancho, alto, 1).bandaInferior;
+  const boton = d.deshacer;
+  expect(d.banda).toEqual(banda);
+  expect(d.fichas).toHaveLength(n);
+
+  // El botón, con tamaño positivo, dentro de la banda.
+  expect(boton.ancho).toBeGreaterThan(0);
+  expect(boton.alto).toBeGreaterThan(0);
+  expect(boton.x).toBeGreaterThanOrEqual(banda.x - EPS);
+  expect(boton.y).toBeGreaterThanOrEqual(banda.y - EPS);
+  expect(boton.x + boton.ancho).toBeLessThanOrEqual(banda.x + banda.ancho + EPS);
+  expect(boton.y + boton.alto).toBeLessThanOrEqual(banda.y + banda.alto + EPS);
+
+  for (const f of d.fichas) {
+    // Fichas iguales, de radio positivo, enteras dentro de la banda y a la izquierda del botón.
+    expect(f.radio).toBeGreaterThan(0);
+    expect(f.radio).toBe(d.fichas[0]?.radio);
+    expect(f.x - f.radio).toBeGreaterThanOrEqual(banda.x - EPS);
+    expect(f.y - f.radio).toBeGreaterThanOrEqual(banda.y - EPS);
+    expect(f.y + f.radio).toBeLessThanOrEqual(banda.y + banda.alto + EPS);
+    expect(f.x + f.radio).toBeLessThanOrEqual(boton.x + EPS);
+    // La descripción va debajo de las fichas.
+    expect(d.descripcion.y).toBeGreaterThanOrEqual(f.y + f.radio - EPS);
+  }
+  // Sin solaparse entre sí.
+  for (const [i, a] of d.fichas.entries()) {
+    for (const b of d.fichas.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(a.radio + b.radio - EPS);
+  }
+  // Fila centrada en la banda.
+  const primera = d.fichas[0];
+  const ultima = d.fichas.at(-1);
+  if (primera !== undefined && ultima !== undefined) {
+    expect(Math.abs((primera.x - primera.radio + ultima.x + ultima.radio) / 2 - (banda.x + banda.ancho / 2))).toBeLessThan(EPS);
+  }
+  // La descripción, dentro de la banda y sin tocar el botón.
+  expect(d.descripcion.y).toBeGreaterThanOrEqual(boton.y + boton.alto - EPS);
+  expect(d.descripcion.y + d.descripcion.alto).toBeLessThanOrEqual(banda.y + banda.alto + EPS);
+}
+
+describe('disposición de la mano', () => {
+  for (const [ancho, alto] of VENTANAS) {
+    it(`ventana ${ancho}×${alto}: de 1 a 12 fichas caben en la banda inferior, centradas y sin solaparse`, () => {
+      for (let n = 1; n <= 12; n++) comprobarMano(ancho, alto, n);
+    });
+  }
+
+  it('propiedad: con ventanas de 100 a 4000 en cada eje y de 1 a 12 fichas', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 100, max: 4000 }), fc.integer({ min: 100, max: 4000 }), fc.integer({ min: 1, max: 12 }), (a, h, n) => {
+        comprobarMano(a, h, n);
+      }),
+    );
+  });
+
+  it.each<[number, number]>([
+    [0, 0],
+    [0, 800],
+    [800, 0],
+    [-5, 300],
+    [Number.NaN, 300],
+  ])('ventana degenerada %d×%d: tamaños 0, sin NaN ni excepciones', (ancho, alto) => {
+    for (let n = 0; n <= 12; n++) {
+      const d = disponerMano({ ancho, alto }, n);
+      expect(JSON.stringify(d)).not.toContain('null');
+      for (const f of d.fichas) expect(f.radio).toBe(0);
+    }
+  });
+
+  it('sin fichas no hay fila, pero sí botón', () => {
+    const d = disponerMano({ ancho: 800, alto: 600 }, 0);
+    expect(d.fichas).toEqual([]);
+    expect(d.deshacer.ancho).toBeGreaterThan(0);
+  });
+});
+
+describe('selección por punto', () => {
+  const centro = (r: Rect) => ({ x: r.x + r.ancho / 2, y: r.y + r.alto / 2 });
+
+  it('celdaEn devuelve la celda de cada centro, para cada lado y varias ventanas', () => {
+    for (const [ancho, alto] of VENTANAS) {
+      for (const lado of LADOS) {
+        const d = disponer(ancho, alto, lado);
+        for (const [y, fila] of d.celdas.entries()) {
+          for (const [x, r] of fila.entries()) expect(celdaEn(centro(r), d)).toEqual({ x, y });
+        }
+      }
+    }
+  });
+
+  it('con una ventana asimétrica distingue x (columna) de y (fila)', () => {
+    const d = disponer(1300, 700, 4);
+    const r = d.celdas[0]?.[3];
+    if (r === undefined) throw new Error('sin celda');
+    // La celda de la columna 3 y la fila 0: un intercambio de ejes daría { x: 0, y: 3 }.
+    expect(celdaEn({ x: r.x + 1, y: r.y + r.alto - 1 }, d)).toEqual({ x: 3, y: 0 });
+    const s = d.celdas[2]?.[1];
+    if (s === undefined) throw new Error('sin celda');
+    expect(celdaEn(centro(s), d)).toEqual({ x: 1, y: 2 });
+  });
+
+  it('celdaEn devuelve null fuera del tablero y en los huecos entre celdas', () => {
+    const d = disponer(800, 600, 3);
+    const t = d.tablero;
+    expect(celdaEn({ x: t.x - 1, y: t.y + 1 }, d)).toBeNull();
+    expect(celdaEn({ x: t.x + 1, y: t.y - 1 }, d)).toBeNull();
+    expect(celdaEn({ x: t.x + t.ancho, y: t.y + t.alto / 2 }, d)).toBeNull();
+    expect(celdaEn({ x: t.x + t.ancho / 2, y: t.y + t.alto }, d)).toBeNull();
+    expect(celdaEn({ x: 5, y: 5 }, d)).toBeNull();
+    // Huecos: entre las columnas 0 y 1, y entre las filas 1 y 2.
+    expect(celdaEn({ x: t.x + d.celda + d.hueco / 2, y: t.y + d.celda / 2 }, d)).toBeNull();
+    expect(celdaEn({ x: t.x + d.celda / 2, y: t.y + 2 * d.celda + 1.5 * d.hueco }, d)).toBeNull();
+  });
+
+  it('celdaEn no encuentra nada con una ventana degenerada', () => {
+    expect(celdaEn({ x: 0, y: 0 }, disponer(0, 0, 3))).toBeNull();
+  });
+
+  it('botonDeshacerEn acierta dentro del botón y falla fuera', () => {
+    const d = disponerMano({ ancho: 800, alto: 600 }, 5);
+    const b = d.deshacer;
+    expect(botonDeshacerEn(centro(b), d)).toBe(true);
+    expect(botonDeshacerEn({ x: b.x, y: b.y }, d)).toBe(true);
+    expect(botonDeshacerEn({ x: b.x - 1, y: b.y + b.alto / 2 }, d)).toBe(false);
+    expect(botonDeshacerEn({ x: b.x + b.ancho, y: b.y + b.alto / 2 }, d)).toBe(false);
+    expect(botonDeshacerEn({ x: b.x + b.ancho / 2, y: b.y - 1 }, d)).toBe(false);
+    expect(botonDeshacerEn({ x: b.x + b.ancho / 2, y: b.y + b.alto }, d)).toBe(false);
+    const ficha = d.fichas[0];
+    if (ficha === undefined) throw new Error('sin ficha');
+    expect(botonDeshacerEn(ficha, d)).toBe(false);
   });
 });
